@@ -126,10 +126,11 @@ table.dt tr:hover td{background:var(--s2);color:var(--tx)}
 </div>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <script>
+// Script principal (não-module) — variáveis globais e lógica do dashboard
 // ============================================================
 // DADOS REAIS — VALORES MENSAIS (NÃO ACUMULADOS) DOS PDFs
 // ============================================================
-const MESES_ALL = ['jan','fev','mar','abr','mai'];
+let MESES_ALL = ['jan','fev','mar','abr','mai'];
 const MESES_LABEL = {jan:'Jan',fev:'Fev',mar:'Mar',abr:'Abr',mai:'Mai'};
 const DU = {jan:21,fev:20,mar:21,abr:21,mai:20};
 
@@ -394,8 +395,19 @@ function render(){
   renderKPIs(); renderCharts(); renderVendedores(); renderPositiv(); renderClienteTables();
 }
 Chart.defaults.color='#a0a0aa';
+// Expor como globais para o módulo Firebase acessar
+window.FAT = FAT;
+window.MARG = MARG;
+window.POSITIV = POSITIV;
+window.MESES_ALL = MESES_ALL;
+window.render = render;
+render();
+</script>
+<script type="module">
+// ── Firebase — módulo separado para suportar import() ──────────────────────
+import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js';
+import { getFirestore, collection, getDocs, onSnapshot } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
 
-// ── Firebase config ────────────────────────────────────────────────────────
 const FIREBASE_CFG = {
   apiKey: "AIzaSyBYENtXQNZ-scr-1o-hMHRNxdvKCHdc86I",
   authDomain: "shoyu-express-dash-b302d.firebaseapp.com",
@@ -405,61 +417,66 @@ const FIREBASE_CFG = {
   appId: "1:460302582921:web:21a51b6b2af50eb5793258"
 };
 
-// ── Aplicar dados de um mês no dashboard ──────────────────────────────────
 function applyMesData(d) {
   if (!d || !d.mesKey) return;
   const {mesKey, anoLabel, fat, marg, pos} = d;
   const ORDER = ['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'];
   const MLABEL = {jan:'Jan',fev:'Fev',mar:'Mar',abr:'Abr',mai:'Mai',jun:'Jun',jul:'Jul',ago:'Ago',set:'Set',out:'Out',nov:'Nov',dez:'Dez'};
-  for (const v of Object.keys(FAT)) {
-    if (fat && fat[v] !== undefined) FAT[v][mesKey] = fat[v];
-    if (marg && marg[v] !== undefined) MARG[v][mesKey] = marg[v];
-    if (pos && pos[v] !== undefined) POSITIV[v][mesKey] = pos[v];
+
+  // Atualizar arrays de dados
+  for (const v of Object.keys(window.FAT || {})) {
+    if (fat && fat[v] !== undefined) window.FAT[v][mesKey] = fat[v];
+    if (marg && marg[v] !== undefined) window.MARG[v][mesKey] = marg[v];
+    if (pos && pos[v] !== undefined) window.POSITIV[v][mesKey] = pos[v];
   }
-  const container = document.querySelector('.month-filters');
-  if (container && !document.querySelector(`.month-btn[data-m="${mesKey}"]`)) {
+
+  // Adicionar mês à lista MESES_ALL se não existir
+  if (window.MESES_ALL && !window.MESES_ALL.includes(mesKey)) {
+    window.MESES_ALL.push(mesKey);
+    window.MESES_ALL.sort((a,b) => ORDER.indexOf(a) - ORDER.indexOf(b));
+  }
+
+  // Adicionar botão de mês se não existir
+  const container = document.querySelector('.filters');
+  if (container && !document.querySelector(`.fb[data-m="${mesKey}"]`)) {
     const btn = document.createElement('button');
-    btn.className = 'month-btn';
+    btn.className = 'fb';
     btn.dataset.m = mesKey;
     btn.textContent = MLABEL[mesKey] || mesKey;
-    const existing = [...container.querySelectorAll('.month-btn[data-m]')];
+    btn.setAttribute('onclick', 'setMes(this)');
+    // Inserir em ordem cronológica antes do primeiro mês posterior
+    const existing = [...container.querySelectorAll('.fb[data-m]')].filter(b => b.dataset.m !== 'todos');
     const idx = ORDER.indexOf(mesKey);
     const after = existing.find(b => ORDER.indexOf(b.dataset.m) > idx);
     if (after) container.insertBefore(btn, after);
     else container.appendChild(btn);
-    btn.addEventListener('click', function() { toggleMes(mesKey); });
   }
 }
 
-// ── Inicializar Firebase e carregar todos os meses ────────────────────────
-import('https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js').then(({initializeApp}) => {
-  return Promise.all([
-    Promise.resolve(initializeApp(FIREBASE_CFG, 'shoyu-dash-' + Date.now())),
-    import('https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js')
-  ]);
-}).then(([app, {getFirestore, collection, getDocs, onSnapshot}]) => {
+try {
+  const app = initializeApp(FIREBASE_CFG, 'shoyu-dash-' + Date.now());
   const db = getFirestore(app);
   const uploadsCol = collection(db, 'uploads');
 
-  // Carregar todos os meses salvos
+  // Carregar todos os meses já salvos
   getDocs(uploadsCol).then(snap => {
     snap.forEach(doc => applyMesData(doc.data()));
-    render();
-  }).catch(err => console.warn('Firebase read error:', err));
+    window.render && window.render();
+  }).catch(err => console.warn('Firebase getDocs error:', err));
 
-  // Listener tempo real — atualiza ao chegar novo upload
+  // Listener em tempo real — dispara quando produtos_por_cliente faz upload
   onSnapshot(uploadsCol, snap => {
     snap.docChanges().forEach(change => {
       if (change.type === 'added' || change.type === 'modified') {
         applyMesData(change.doc.data());
       }
     });
-    render();
-  }, err => console.warn('Firebase listener error:', err));
+    window.render && window.render();
+  }, err => console.warn('Firebase onSnapshot error:', err));
 
-}).catch(err => console.warn('Firebase init error:', err));
-
-render();
+} catch(err) {
+  console.warn('Firebase init error:', err);
+}
 </script>
 </body>
 </html>
