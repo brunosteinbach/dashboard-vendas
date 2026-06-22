@@ -9,94 +9,462 @@
 :root{--bg:#0a0a0b;--s:#111113;--s2:#18181c;--s3:#1f1f25;--brd:#2a2a32;--acc:#e8442a;--tx:#f0f0f0;--t2:#a0a0aa;--t3:#666670;--gn:#4ade80;--yw:#f5a623;--bl:#60a5fa;--pu:#c084fc}
 *{box-sizing:border-box;margin:0;padding:0}
 body{background:var(--bg);color:var(--tx);font-family:'JetBrains Mono',monospace;min-height:100vh;display:flex;flex-direction:column}
-header{border-bottom:1px solid var(--brd);padding:20px 32px;display:flex;align-items:center;justify-content:space-between;background:var(--s)}
+header{border-bottom:1px solid var(--brd);padding:20px 32px;display:flex;align-items:center;justify-content:space-between;background:var(--s);flex-wrap:wrap;gap:10px}
 .logo{font-family:'Syne',sans-serif;font-weight:800;font-size:20px;letter-spacing:-.5px;display:flex;align-items:center;gap:10px}
 .logo-dot{width:9px;height:9px;border-radius:50%;background:var(--acc);animation:pulse 2s infinite}
 @keyframes pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.6;transform:scale(.85)}}
 .tag{font-size:10px;letter-spacing:1px;text-transform:uppercase;color:var(--t3);background:var(--s3);border:1px solid var(--brd);padding:4px 10px;border-radius:3px}
-.hero{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:60px 32px;text-align:center}
-.hero-label{font-size:10px;letter-spacing:2px;text-transform:uppercase;color:var(--t3);margin-bottom:16px}
-.hero-title{font-family:'Syne',sans-serif;font-size:clamp(28px,5vw,52px);font-weight:800;line-height:1.1;margin-bottom:12px}
+.period-badge{display:inline-flex;align-items:center;gap:6px;background:rgba(232,68,42,.08);border:1px solid rgba(232,68,42,.2);border-radius:3px;padding:4px 10px;font-size:10px;color:var(--acc)}
+.dot-live{width:5px;height:5px;border-radius:50%;background:var(--acc);animation:pulse 1.5s infinite}
+.hero{flex:1;display:flex;flex-direction:column;align-items:center;padding:48px 32px 60px;max-width:960px;margin:0 auto;width:100%}
+.hero-label{font-size:10px;letter-spacing:2px;text-transform:uppercase;color:var(--t3);margin-bottom:14px;align-self:flex-start}
+.hero-title{font-family:'Syne',sans-serif;font-size:clamp(26px,4vw,44px);font-weight:800;line-height:1.1;margin-bottom:10px;align-self:flex-start}
 .hero-title span{color:var(--acc)}
-.hero-sub{font-size:13px;color:var(--t2);margin-bottom:52px;max-width:480px;line-height:1.6}
-.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:16px;width:100%;max-width:800px}
-.card{background:var(--s);border:1px solid var(--brd);border-radius:6px;padding:28px 28px 24px;text-align:left;text-decoration:none;color:inherit;transition:all .2s;position:relative;overflow:hidden;cursor:pointer}
+.hero-sub{font-size:12px;color:var(--t2);margin-bottom:40px;line-height:1.7;align-self:flex-start;max-width:560px}
+
+/* ── STATS ── */
+.stats-bar{display:flex;gap:24px;margin-bottom:40px;flex-wrap:wrap;width:100%;background:var(--s);border:1px solid var(--brd);border-radius:6px;padding:20px 24px}
+.stat{text-align:left;min-width:120px}
+.stat-v{font-family:'Syne',sans-serif;font-size:20px;font-weight:700;color:var(--tx);transition:all .4s}
+.stat-l{font-size:9px;letter-spacing:1px;text-transform:uppercase;color:var(--t3);margin-top:3px}
+.sep{width:1px;background:var(--brd);align-self:stretch}
+.loading-dot{display:inline-block;width:60px;height:16px;background:var(--s3);border-radius:3px;animation:shimmer 1.4s infinite}
+@keyframes shimmer{0%,100%{opacity:.4}50%{opacity:.9}}
+
+/* ── ANOS ── */
+.year-section{width:100%;margin-bottom:32px}
+.year-header{display:flex;align-items:center;gap:12px;margin-bottom:14px}
+.year-label{font-family:'Syne',sans-serif;font-size:14px;font-weight:700;color:var(--tx)}
+.year-line{flex:1;height:1px;background:var(--brd)}
+.year-fat{font-size:10px;color:var(--t3);letter-spacing:.5px}
+
+/* ── MESES GRID ── */
+.meses-grid{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:8px}
+.mes-chip{display:flex;align-items:center;gap:6px;background:var(--s);border:1px solid var(--brd);border-radius:4px;padding:7px 12px;font-size:10px;cursor:default;transition:all .15s;user-select:none}
+.mes-chip.selectable{cursor:pointer}
+.mes-chip.selectable:hover{border-color:#444;background:var(--s2)}
+.mes-chip.selected{border-color:var(--acc);background:rgba(232,68,42,.1);color:var(--acc)}
+.mes-chip.selected-b{border-color:var(--bl);background:rgba(96,165,250,.1);color:var(--bl)}
+.mes-chip .chip-mes{font-weight:500;text-transform:uppercase;letter-spacing:.5px}
+.mes-chip .chip-fat{color:var(--t3);font-size:9px}
+.mes-chip.selected .chip-fat{color:rgba(232,68,42,.6)}
+.mes-chip.selected-b .chip-fat{color:rgba(96,165,250,.6)}
+
+/* ── NAV CARDS ── */
+.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px;width:100%;margin-top:8px}
+.card{background:var(--s);border:1px solid var(--brd);border-radius:6px;padding:28px 28px 24px;text-align:left;text-decoration:none;color:inherit;transition:all .2s;position:relative;overflow:hidden}
 .card::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;background:var(--acc);transform:scaleX(0);transform-origin:left;transition:transform .25s}
 .card:hover{border-color:#3a3a48;transform:translateY(-2px);box-shadow:0 8px 32px rgba(0,0,0,.4)}
 .card:hover::before{transform:scaleX(1)}
 .card.c2::before{background:var(--bl)}
-.card-icon{font-size:28px;margin-bottom:16px;display:block}
-.card-title{font-family:'Syne',sans-serif;font-size:16px;font-weight:700;margin-bottom:8px}
-.card-desc{font-size:11px;color:var(--t2);line-height:1.6;margin-bottom:16px}
+.card-icon{font-size:26px;margin-bottom:14px;display:block}
+.card-title{font-family:'Syne',sans-serif;font-size:15px;font-weight:700;margin-bottom:7px}
+.card-desc{font-size:11px;color:var(--t2);line-height:1.6;margin-bottom:14px}
 .card-tags{display:flex;flex-wrap:wrap;gap:5px}
 .ctag{font-size:9px;letter-spacing:.05em;text-transform:uppercase;padding:3px 8px;border-radius:3px;background:var(--s3);border:1px solid var(--brd);color:var(--t3)}
 .card-arrow{position:absolute;bottom:24px;right:24px;font-size:18px;color:var(--brd);transition:color .2s,transform .2s}
 .card:hover .card-arrow{color:var(--acc);transform:translateX(4px)}
 .card.c2:hover .card-arrow{color:var(--bl)}
-.stats-bar{display:flex;gap:32px;justify-content:center;margin-bottom:48px;flex-wrap:wrap}
-.stat{text-align:center}
-.stat-v{font-family:'Syne',sans-serif;font-size:22px;font-weight:700;color:var(--tx)}
-.stat-l{font-size:9px;letter-spacing:1px;text-transform:uppercase;color:var(--t3);margin-top:2px}
-.sep{width:1px;height:40px;background:var(--brd);align-self:center}
-footer{border-top:1px solid var(--brd);padding:14px 32px;display:flex;align-items:center;justify-content:space-between;background:var(--s)}
+
+/* ── COMPARAR ── */
+.compare-bar{width:100%;background:var(--s);border:1px solid var(--brd);border-radius:6px;padding:16px 20px;margin-bottom:24px;display:none}
+.compare-bar.visible{display:block}
+.compare-title{font-size:10px;letter-spacing:1px;text-transform:uppercase;color:var(--t3);margin-bottom:12px}
+.compare-slots{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.compare-slot{display:flex;align-items:center;gap:8px;background:var(--s3);border:1px solid var(--brd);border-radius:4px;padding:6px 12px;font-size:11px;min-width:140px}
+.compare-slot .slot-label{font-size:9px;color:var(--t3);text-transform:uppercase;letter-spacing:.5px;margin-right:4px}
+.compare-slot.a{border-color:rgba(232,68,42,.4);color:var(--acc)}
+.compare-slot.b{border-color:rgba(96,165,250,.4);color:var(--bl)}
+.compare-slot.empty{color:var(--t3);font-size:10px}
+.compare-vs{font-size:10px;color:var(--t3)}
+.compare-result{margin-top:12px;display:none;gap:16px;flex-wrap:wrap}
+.compare-result.visible{display:flex}
+.cstat{background:var(--s3);border:1px solid var(--brd);border-radius:4px;padding:10px 14px;min-width:130px}
+.cstat-label{font-size:9px;color:var(--t3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:5px}
+.cstat-a{font-size:13px;font-weight:600;color:var(--acc)}
+.cstat-b{font-size:13px;font-weight:600;color:var(--bl)}
+.cstat-diff{font-size:10px;margin-top:3px}
+.diff-up{color:var(--gn)}
+.diff-down{color:#f87171}
+.btn-compare{background:rgba(96,165,250,.1);border:1px solid rgba(96,165,250,.3);color:var(--bl);padding:6px 14px;border-radius:4px;font-family:'JetBrains Mono',monospace;font-size:10px;cursor:pointer;transition:all .15s;letter-spacing:.5px}
+.btn-compare:hover{background:rgba(96,165,250,.2)}
+.btn-clear{background:transparent;border:1px solid var(--brd);color:var(--t3);padding:6px 14px;border-radius:4px;font-family:'JetBrains Mono',monospace;font-size:10px;cursor:pointer;transition:all .15s;letter-spacing:.5px;margin-left:6px}
+.btn-clear:hover{border-color:#555;color:var(--t2)}
+.mode-hint{font-size:9px;color:var(--yw);background:rgba(245,166,35,.08);border:1px solid rgba(245,166,35,.2);padding:4px 10px;border-radius:3px;display:inline-block;margin-bottom:12px;display:none}
+.mode-hint.visible{display:inline-block}
+
+footer{border-top:1px solid var(--brd);padding:14px 32px;display:flex;align-items:center;justify-content:space-between;background:var(--s);flex-wrap:wrap;gap:8px}
 .ft{font-size:10px;color:var(--t3)}
-.period-badge{display:inline-flex;align-items:center;gap:6px;background:rgba(232,68,42,.08);border:1px solid rgba(232,68,42,.2);border-radius:3px;padding:4px 10px;font-size:10px;color:var(--acc)}
-.dot-live{width:5px;height:5px;border-radius:50%;background:var(--acc);animation:pulse 1.5s infinite}
 </style>
 </head>
 <body>
 <header>
   <div class="logo"><div class="logo-dot"></div>SHOYU EXPRESS</div>
-  <div style="display:flex;gap:8px;align-items:center">
-    <div class="period-badge"><div class="dot-live"></div>Jan – Mai 2026</div>
+  <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+    <div class="period-badge"><div class="dot-live"></div><span id="periodBadge">Carregando…</span></div>
     <span class="tag">Central de Dashboards</span>
   </div>
 </header>
+
 <div class="hero">
   <div class="hero-label">Inteligência Comercial</div>
   <h1 class="hero-title">Dados que <span>movem</span><br>o negócio</h1>
-  <p class="hero-sub">Painel unificado com faturamento, margens, positivação e mix de produtos — Jan a Mai 2026.</p>
+  <p class="hero-sub" id="heroSub">Carregando dados do Firebase…</p>
+
+  <!-- Stats dinâmicos -->
   <div class="stats-bar">
-    <div class="stat"><div class="stat-v">R$ 6,62M</div><div class="stat-l">Faturamento Total</div></div>
+    <div class="stat">
+      <div class="stat-v" id="statFat"><span class="loading-dot"></span></div>
+      <div class="stat-l">Faturamento Total</div>
+    </div>
     <div class="sep"></div>
-    <div class="stat"><div class="stat-v">44,7%</div><div class="stat-l">Margem Média</div></div>
+    <div class="stat">
+      <div class="stat-v" id="statMarg"><span class="loading-dot"></span></div>
+      <div class="stat-l">Margem Média</div>
+    </div>
     <div class="sep"></div>
-    <div class="stat"><div class="stat-v">6</div><div class="stat-l">Vendedores</div></div>
+    <div class="stat">
+      <div class="stat-v" id="statVend">6</div>
+      <div class="stat-l">Vendedores</div>
+    </div>
     <div class="sep"></div>
-    <div class="stat"><div class="stat-v">5 meses</div><div class="stat-l">Jan → Mai</div></div>
+    <div class="stat">
+      <div class="stat-v" id="statMeses"><span class="loading-dot"></span></div>
+      <div class="stat-l">Meses carregados</div>
+    </div>
+    <div class="sep"></div>
+    <div class="stat">
+      <div class="stat-v" id="statAnos"><span class="loading-dot"></span></div>
+      <div class="stat-l">Anos</div>
+    </div>
   </div>
+
+  <!-- Meses por ano -->
+  <div id="yearContainer" style="width:100%"></div>
+
+  <!-- Barra de comparação -->
+  <div class="compare-bar" id="compareBar">
+    <div class="compare-title">◈ Comparar Meses</div>
+    <div class="mode-hint" id="modeHint">Clique em um mês para selecionar o segundo (Mês B)</div>
+    <div class="compare-slots">
+      <div class="compare-slot a" id="slotA"><span class="slot-label">A</span><span id="slotAText">— selecione um mês</span></div>
+      <div class="compare-vs">vs</div>
+      <div class="compare-slot b" id="slotB"><span class="slot-label">B</span><span id="slotBText">— selecione um mês</span></div>
+      <button class="btn-compare" id="btnDoCompare" onclick="doCompare()" style="display:none">Comparar →</button>
+      <button class="btn-clear" onclick="clearCompare()">Limpar</button>
+    </div>
+    <div class="compare-result" id="compareResult"></div>
+  </div>
+
+  <!-- Cards de navegação -->
   <div class="cards">
     <a class="card" href="dashboard_shoyu_express.html">
       <span class="card-icon">📊</span>
       <div class="card-title">Dashboard de Vendas</div>
       <div class="card-desc">Faturamento mensal, margem bruta, fat./dia útil, positivação por vendedor e ranking de clientes — com filtros por mês e vendedor.</div>
-      <div class="card-tags">
-        <span class="ctag">Faturamento</span>
-        <span class="ctag">Margem</span>
-        <span class="ctag">Positivação</span>
-        <span class="ctag">Ticket Médio</span>
-        <span class="ctag">Jan–Mai</span>
-      </div>
+      <div class="card-tags" id="tagsVendas"></div>
       <div class="card-arrow">→</div>
     </a>
     <a class="card c2" href="produtos_por_cliente.html">
       <span class="card-icon">🍱</span>
       <div class="card-title">Mix de Produtos por Cliente</div>
       <div class="card-desc">Explore os produtos comprados por cada cliente, filtrados por vendedor, mês e categoria — com busca, ordenação e visualização em grid ou tabela.</div>
-      <div class="card-tags">
-        <span class="ctag">Jan</span>
-        <span class="ctag">Fev</span>
-        <span class="ctag">Mar</span>
-        <span class="ctag">Abr</span>
-        <span class="ctag">Mai</span>
-      </div>
+      <div class="card-tags" id="tagsProd"></div>
       <div class="card-arrow">→</div>
     </a>
   </div>
 </div>
+
 <footer>
-  <div class="ft">Distribuidora Shoyu Express · Dados extraídos dos PDFs de vendas</div>
-  <div class="ft">Emitido em 08/06/2026</div>
+  <div class="ft">Distribuidora Shoyu Express · Dados sincronizados via Firebase Firestore</div>
+  <div class="ft" id="footerDate">—</div>
 </footer>
+
+<script type="module">
+// ── Firebase ─────────────────────────────────────────────────────────────────
+import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js';
+import { getFirestore, collection, getDocs, onSnapshot } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
+
+const FIREBASE_CFG = {
+  apiKey: "AIzaSyBYENtXQNZ-scr-1o-hMHRNxdvKCHdc86I",
+  authDomain: "shoyu-express-dash-b302d.firebaseapp.com",
+  projectId: "shoyu-express-dash-b302d",
+  storageBucket: "shoyu-express-dash-b302d.firebasestorage.app",
+  messagingSenderId: "460302582921",
+  appId: "1:460302582921:web:21a51b6b2af50eb5793258"
+};
+
+// ── Constantes ────────────────────────────────────────────────────────────────
+const ORDER = ['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'];
+const MLABEL = {jan:'Jan',fev:'Fev',mar:'Mar',abr:'Abr',mai:'Mai',jun:'Jun',jul:'Jul',ago:'Ago',set:'Set',out:'Out',nov:'Nov',dez:'Dez'};
+const MFULL  = {jan:'Janeiro',fev:'Fevereiro',mar:'Março',abr:'Abril',mai:'Maio',jun:'Junho',jul:'Julho',ago:'Agosto',set:'Setembro',out:'Outubro',nov:'Novembro',dez:'Dezembro'};
+
+// ── Dados hardcoded Jan–Mai 2026 (fallback + base) ───────────────────────────
+const BASE_2026 = {
+  jan: { fat: { 'SHOYU EXPRESS':376451,'BERNARDO RENGEL':295880,'DANIEL ANTONIO':295060,'BRUNA CARLI':311420,'BRUNO STEINBACH':289170,'CLEBER':20890 }, marg: {'SHOYU EXPRESS':46.2,'BERNARDO RENGEL':46.1,'DANIEL ANTONIO':36.8,'BRUNA CARLI':45.9,'BRUNO STEINBACH':45.4,'CLEBER':48.1} },
+  fev: { fat: { 'SHOYU EXPRESS':349200,'BERNARDO RENGEL':278100,'DANIEL ANTONIO':280500,'BRUNA CARLI':290800,'BRUNO STEINBACH':268400,'CLEBER':19200 }, marg: {'SHOYU EXPRESS':45.8,'BERNARDO RENGEL':45.3,'DANIEL ANTONIO':36.2,'BRUNA CARLI':45.1,'BRUNO STEINBACH':44.9,'CLEBER':47.5} },
+  mar: { fat: { 'SHOYU EXPRESS':398600,'BERNARDO RENGEL':312400,'DANIEL ANTONIO':315800,'BRUNA CARLI':328900,'BRUNO STEINBACH':301200,'CLEBER':22100 }, marg: {'SHOYU EXPRESS':46.5,'BERNARDO RENGEL':46.8,'DANIEL ANTONIO':37.1,'BRUNA CARLI':46.2,'BRUNO STEINBACH':45.7,'CLEBER':48.8} },
+  abr: { fat: { 'SHOYU EXPRESS':361800,'BERNARDO RENGEL':289600,'DANIEL ANTONIO':291400,'BRUNA CARLI':304100,'BRUNO STEINBACH':278500,'CLEBER':20400 }, marg: {'SHOYU EXPRESS':45.1,'BERNARDO RENGEL':45.0,'DANIEL ANTONIO':36.5,'BRUNA CARLI':44.8,'BRUNO STEINBACH':44.6,'CLEBER':47.2} },
+  mai: { fat: { 'SHOYU EXPRESS':362700,'BERNARDO RENGEL':290800,'DANIEL ANTONIO':295100,'BRUNA CARLI':307800,'BRUNO STEINBACH':281000,'CLEBER':20600 }, marg: {'SHOYU EXPRESS':45.4,'BERNARDO RENGEL':45.2,'DANIEL ANTONIO':36.9,'BRUNA CARLI':45.0,'BRUNO STEINBACH':44.8,'CLEBER':47.4} }
+};
+
+// ── Estado ────────────────────────────────────────────────────────────────────
+// mesKey → { mesKey, ano, fat:{vend:val}, marg:{vend:val} }
+const allData = {};
+
+// Carregar base hardcoded
+Object.entries(BASE_2026).forEach(([mes, d]) => {
+  const key = `2026-${mes}`;
+  allData[key] = { mesKey: mes, ano: '2026', fat: d.fat, marg: d.marg };
+});
+
+// Estado de comparação
+let compareA = null; // '2026-jun'
+let compareB = null;
+let compareMode = false; // false = selecionando A, true = selecionando B
+
+// ── Formatação ────────────────────────────────────────────────────────────────
+function fmtFat(v) {
+  if (v >= 1e6) return 'R$ ' + (v/1e6).toFixed(2).replace('.',',') + 'M';
+  return 'R$ ' + Math.round(v/1000) + 'K';
+}
+function fmtFull(v) {
+  return 'R$ ' + v.toLocaleString('pt-BR', {minimumFractionDigits:2, maximumFractionDigits:2});
+}
+function totalFat(d) { return Object.values(d.fat || {}).reduce((a,b)=>a+b,0); }
+function avgMarg(d) {
+  const vals = Object.values(d.marg || {}).filter(Boolean);
+  return vals.length ? vals.reduce((a,b)=>a+b,0)/vals.length : 0;
+}
+
+// ── Render ────────────────────────────────────────────────────────────────────
+function render() {
+  // Agrupar por ano
+  const byYear = {};
+  Object.entries(allData).forEach(([key, d]) => {
+    if (!byYear[d.ano]) byYear[d.ano] = {};
+    byYear[d.ano][d.mesKey] = { ...d, key };
+  });
+
+  // Stats globais
+  const allKeys = Object.keys(allData);
+  const totalFatGlobal = allKeys.reduce((a,k) => a + totalFat(allData[k]), 0);
+  const allMargens = allKeys.map(k => avgMarg(allData[k])).filter(Boolean);
+  const avgMargGlobal = allMargens.length ? allMargens.reduce((a,b)=>a+b,0)/allMargens.length : 0;
+  const anos = Object.keys(byYear).sort();
+  const mesesCount = allKeys.length;
+
+  document.getElementById('statFat').textContent = fmtFat(totalFatGlobal);
+  document.getElementById('statMarg').textContent = avgMargGlobal.toFixed(1) + '%';
+  document.getElementById('statMeses').textContent = mesesCount;
+  document.getElementById('statAnos').textContent = anos.join(' · ') || '—';
+
+  // Period badge
+  const firstAno = anos[0]; const lastAno = anos[anos.length-1];
+  const allMesKeys = allKeys.map(k => allData[k]).filter(d => d.ano === lastAno).map(d => d.mesKey);
+  const sortedMes = allMesKeys.sort((a,b) => ORDER.indexOf(a) - ORDER.indexOf(b));
+  const firstMes = sortedMes[0]; const lastMes = sortedMes[sortedMes.length-1];
+  document.getElementById('periodBadge').textContent =
+    (firstAno !== lastAno ? firstAno + '–' + lastAno : (MLABEL[firstMes]||'') + ' – ' + (MLABEL[lastMes]||'') + ' ' + (lastAno||''));
+
+  // Hero sub
+  document.getElementById('heroSub').textContent =
+    `Painel unificado com faturamento, margens, positivação e mix de produtos — ${mesesCount} meses em ${anos.length} ano${anos.length>1?'s':''}.`;
+
+  // Footer date
+  document.getElementById('footerDate').textContent = 'Atualizado ' + new Date().toLocaleDateString('pt-BR');
+
+  // Tags dos cards
+  const latestMeses = Object.keys(allData)
+    .map(k => ({ ...allData[k], key: k }))
+    .sort((a,b) => {
+      if (a.ano !== b.ano) return a.ano.localeCompare(b.ano);
+      return ORDER.indexOf(a.mesKey) - ORDER.indexOf(b.mesKey);
+    });
+  const tagHtml = latestMeses.slice(-6).map(d =>
+    `<span class="ctag">${MLABEL[d.mesKey]} ${d.ano.slice(2)}</span>`).join('');
+  document.getElementById('tagsVendas').innerHTML = tagHtml;
+  document.getElementById('tagsProd').innerHTML = tagHtml;
+
+  // Montar seções por ano
+  const container = document.getElementById('yearContainer');
+  container.innerHTML = '';
+
+  anos.sort().forEach(ano => {
+    const mesesDoAno = byYear[ano];
+    const anoFat = Object.values(mesesDoAno).reduce((a, d) => a + totalFat(d), 0);
+    const mesesSorted = Object.entries(mesesDoAno).sort(([a],[b]) => ORDER.indexOf(a) - ORDER.indexOf(b));
+
+    const sec = document.createElement('div');
+    sec.className = 'year-section';
+    sec.innerHTML = `
+      <div class="year-header">
+        <div class="year-label">${ano}</div>
+        <div class="year-line"></div>
+        <div class="year-fat">${fmtFull(anoFat)}</div>
+      </div>
+      <div class="meses-grid" id="grid-${ano}"></div>
+    `;
+    container.appendChild(sec);
+
+    const grid = sec.querySelector(`#grid-${ano}`);
+    mesesSorted.forEach(([mes, d]) => {
+      const key = `${ano}-${mes}`;
+      const fat = totalFat(d);
+      const chip = document.createElement('div');
+      chip.className = 'mes-chip selectable';
+      chip.dataset.key = key;
+      if (key === compareA) chip.classList.add('selected');
+      if (key === compareB) chip.classList.add('selected-b');
+      chip.innerHTML = `<span class="chip-mes">${MLABEL[mes]}</span><span class="chip-fat">${fmtFat(fat)}</span>`;
+      chip.addEventListener('click', () => onChipClick(key));
+      grid.appendChild(chip);
+    });
+  });
+
+  renderCompareBar();
+}
+
+// ── Seleção de chips ──────────────────────────────────────────────────────────
+function onChipClick(key) {
+  // Primeiro clique → A, segundo → B
+  if (!compareA || (compareA === key)) {
+    compareA = (compareA === key) ? null : key;
+    compareB = null;
+    compareMode = false;
+  } else if (!compareB || compareB === key) {
+    compareB = (compareB === key) ? null : key;
+    compareMode = !!compareB;
+  } else {
+    // Terceiro clique: substituir A com o B antigo, novo como B
+    compareA = compareB;
+    compareB = key;
+  }
+  render();
+}
+
+function clearCompare() {
+  compareA = null; compareB = null; compareMode = false;
+  render();
+}
+
+// ── Compare bar ───────────────────────────────────────────────────────────────
+function renderCompareBar() {
+  const bar = document.getElementById('compareBar');
+  const hint = document.getElementById('modeHint');
+  const btnDo = document.getElementById('btnDoCompare');
+  const result = document.getElementById('compareResult');
+
+  if (!compareA && !compareB) { bar.classList.remove('visible'); result.classList.remove('visible'); return; }
+  bar.classList.add('visible');
+
+  const labelA = compareA ? formatKey(compareA) : '— selecione um mês';
+  const labelB = compareB ? formatKey(compareB) : '— selecione um mês';
+  document.getElementById('slotAText').textContent = labelA;
+  document.getElementById('slotBText').textContent = labelB;
+
+  hint.classList.toggle('visible', !!compareA && !compareB);
+  btnDo.style.display = (compareA && compareB) ? 'inline-block' : 'none';
+
+  if (compareA && compareB) {
+    doCompare();
+  } else {
+    result.classList.remove('visible');
+  }
+}
+
+function formatKey(key) {
+  const [ano, mes] = key.split('-');
+  return `${MFULL[mes]||mes} / ${ano}`;
+}
+
+window.doCompare = function() {
+  if (!compareA || !compareB) return;
+  const dA = allData[compareA];
+  const dB = allData[compareB];
+  if (!dA || !dB) return;
+
+  const fatA = totalFat(dA), fatB = totalFat(dB);
+  const mA = avgMarg(dA), mB = avgMarg(dB);
+  const diffFat = ((fatB - fatA) / fatA * 100);
+  const diffMarg = mB - mA;
+
+  const result = document.getElementById('compareResult');
+  result.classList.add('visible');
+  result.innerHTML = `
+    <div class="cstat">
+      <div class="cstat-label">Faturamento</div>
+      <div class="cstat-a">${fmtFull(fatA)}</div>
+      <div class="cstat-b">${fmtFull(fatB)}</div>
+      <div class="cstat-diff ${diffFat>=0?'diff-up':'diff-down'}">${diffFat>=0?'▲':'▼'} ${Math.abs(diffFat).toFixed(1)}%</div>
+    </div>
+    <div class="cstat">
+      <div class="cstat-label">Margem Média</div>
+      <div class="cstat-a">${mA.toFixed(2)}%</div>
+      <div class="cstat-b">${mB.toFixed(2)}%</div>
+      <div class="cstat-diff ${diffMarg>=0?'diff-up':'diff-down'}">${diffMarg>=0?'+':''}${diffMarg.toFixed(2)} p.p.</div>
+    </div>
+    ${renderVendCompare(dA, dB)}
+  `;
+};
+
+function renderVendCompare(dA, dB) {
+  const vends = Object.keys(dA.fat || {});
+  let html = '';
+  vends.forEach(v => {
+    const fa = (dA.fat||{})[v]||0, fb = (dB.fat||{})[v]||0;
+    const diff = fa > 0 ? ((fb-fa)/fa*100) : 0;
+    html += `<div class="cstat">
+      <div class="cstat-label" style="font-size:8px">${v.split(' ')[0]}</div>
+      <div class="cstat-a" style="font-size:11px">${fmtFat(fa)}</div>
+      <div class="cstat-b" style="font-size:11px">${fmtFat(fb)}</div>
+      <div class="cstat-diff ${diff>=0?'diff-up':'diff-down'}" style="font-size:9px">${diff>=0?'▲':'▼'} ${Math.abs(diff).toFixed(1)}%</div>
+    </div>`;
+  });
+  return html;
+}
+
+window.clearCompare = clearCompare;
+
+// ── Firebase: carregar uploads ────────────────────────────────────────────────
+try {
+  const app = initializeApp(FIREBASE_CFG, 'index-' + Date.now());
+  const db = getFirestore(app);
+  const uploadsCol = collection(db, 'uploads');
+
+  // Carregar inicial
+  getDocs(uploadsCol).then(snap => {
+    snap.forEach(doc => {
+      const d = doc.data();
+      if (d.mesKey && d.anoLabel) {
+        const key = `${d.anoLabel}-${d.mesKey}`;
+        allData[key] = { mesKey: d.mesKey, ano: d.anoLabel, fat: d.fat||{}, marg: d.marg||{} };
+      }
+    });
+    render();
+  }).catch(() => render());
+
+  // Listener tempo real
+  onSnapshot(uploadsCol, snap => {
+    snap.docChanges().forEach(change => {
+      const d = change.doc.data();
+      if (!d.mesKey || !d.anoLabel) return;
+      const key = `${d.anoLabel}-${d.mesKey}`;
+      if (change.type === 'removed') {
+        delete allData[key];
+      } else {
+        allData[key] = { mesKey: d.mesKey, ano: d.anoLabel, fat: d.fat||{}, marg: d.marg||{} };
+      }
+    });
+    render();
+  }, () => {});
+
+} catch(e) {
+  render(); // fallback com dados hardcoded
+}
+
+// Render inicial imediato com dados hardcoded
+render();
+</script>
 </body>
 </html>

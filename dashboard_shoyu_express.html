@@ -395,61 +395,69 @@ function render(){
 }
 Chart.defaults.color='#a0a0aa';
 
-// ── Integração com upload do dashboard de produtos ─────────────────────────
-function applyUploadPayload(payload) {
-  try {
-    const d = JSON.parse(payload);
-    if (!d || !d.mesKey) return;
-    const {mesKey, anoLabel, fat, marg, pos} = d;
-    // Injetar dados
-    for (const v of Object.keys(FAT)) {
-      if (fat[v] !== undefined) FAT[v][mesKey] = fat[v];
-      if (marg[v] !== undefined) MARG[v][mesKey] = marg[v];
-      if (pos[v] !== undefined) POSITIV[v][mesKey] = pos[v];
-    }
-    // Adicionar mês aos botões se não existir
-    const ORDER = ['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'];
-    const MLABEL = {jan:'Jan',fev:'Fev',mar:'Mar',abr:'Abr',mai:'Mai',jun:'Jun',jul:'Jul',ago:'Ago',set:'Set',out:'Out',nov:'Nov',dez:'Dez'};
-    const container = document.querySelector('.month-filters');
-    if (container && !document.querySelector(`.month-btn[data-m="${mesKey}"]`)) {
-      const btn = document.createElement('button');
-      btn.className = 'month-btn';
-      btn.dataset.m = mesKey;
-      btn.textContent = MLABEL[mesKey] || mesKey;
-      // inserir em ordem
-      const existing = [...container.querySelectorAll('.month-btn[data-m]')];
-      const idx = ORDER.indexOf(mesKey);
-      const after = existing.find(b => ORDER.indexOf(b.dataset.m) > idx);
-      if (after) container.insertBefore(btn, after);
-      else container.appendChild(btn);
-      btn.addEventListener('click', function() { toggleMes(mesKey); });
-    }
-    render();
-    // Feedback visual
-    const tag = document.querySelector('.data-tag') || document.querySelector('.tag');
-    if (tag) {
-      const orig = tag.textContent;
-      tag.textContent = '✅ ' + (MLABEL[mesKey]||mesKey) + ' ' + (anoLabel||'') + ' carregado!';
-      tag.style.color = '#4ade80';
-      setTimeout(() => { tag.textContent = orig; tag.style.color = ''; }, 3000);
-    }
-  } catch(e) { console.warn('Upload payload error:', e); }
+// ── Firebase config ────────────────────────────────────────────────────────
+const FIREBASE_CFG = {
+  apiKey: "AIzaSyBYENtXQNZ-scr-1o-hMHRNxdvKCHdc86I",
+  authDomain: "shoyu-express-dash-b302d.firebaseapp.com",
+  projectId: "shoyu-express-dash-b302d",
+  storageBucket: "shoyu-express-dash-b302d.firebasestorage.app",
+  messagingSenderId: "460302582921",
+  appId: "1:460302582921:web:21a51b6b2af50eb5793258"
+};
+
+// ── Aplicar dados de um mês no dashboard ──────────────────────────────────
+function applyMesData(d) {
+  if (!d || !d.mesKey) return;
+  const {mesKey, anoLabel, fat, marg, pos} = d;
+  const ORDER = ['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'];
+  const MLABEL = {jan:'Jan',fev:'Fev',mar:'Mar',abr:'Abr',mai:'Mai',jun:'Jun',jul:'Jul',ago:'Ago',set:'Set',out:'Out',nov:'Nov',dez:'Dez'};
+  for (const v of Object.keys(FAT)) {
+    if (fat && fat[v] !== undefined) FAT[v][mesKey] = fat[v];
+    if (marg && marg[v] !== undefined) MARG[v][mesKey] = marg[v];
+    if (pos && pos[v] !== undefined) POSITIV[v][mesKey] = pos[v];
+  }
+  const container = document.querySelector('.month-filters');
+  if (container && !document.querySelector(`.month-btn[data-m="${mesKey}"]`)) {
+    const btn = document.createElement('button');
+    btn.className = 'month-btn';
+    btn.dataset.m = mesKey;
+    btn.textContent = MLABEL[mesKey] || mesKey;
+    const existing = [...container.querySelectorAll('.month-btn[data-m]')];
+    const idx = ORDER.indexOf(mesKey);
+    const after = existing.find(b => ORDER.indexOf(b.dataset.m) > idx);
+    if (after) container.insertBefore(btn, after);
+    else container.appendChild(btn);
+    btn.addEventListener('click', function() { toggleMes(mesKey); });
+  }
 }
 
-// Verificar se há dado novo no localStorage ao abrir
-(function() {
-  try {
-    const latest = localStorage.getItem('shoyu_upload_latest');
-    if (latest) applyUploadPayload(latest);
-  } catch(e) {}
-})();
+// ── Inicializar Firebase e carregar todos os meses ────────────────────────
+import('https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js').then(({initializeApp}) => {
+  return Promise.all([
+    Promise.resolve(initializeApp(FIREBASE_CFG, 'shoyu-dash-' + Date.now())),
+    import('https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js')
+  ]);
+}).then(([app, {getFirestore, collection, getDocs, onSnapshot}]) => {
+  const db = getFirestore(app);
+  const uploadsCol = collection(db, 'uploads');
 
-// Escutar novos uploads em tempo real (mesma aba ou outra aba)
-window.addEventListener('storage', function(e) {
-  if (e.key && e.key.startsWith('shoyu_upload_') && e.newValue) {
-    applyUploadPayload(e.newValue);
-  }
-});
+  // Carregar todos os meses salvos
+  getDocs(uploadsCol).then(snap => {
+    snap.forEach(doc => applyMesData(doc.data()));
+    render();
+  }).catch(err => console.warn('Firebase read error:', err));
+
+  // Listener tempo real — atualiza ao chegar novo upload
+  onSnapshot(uploadsCol, snap => {
+    snap.docChanges().forEach(change => {
+      if (change.type === 'added' || change.type === 'modified') {
+        applyMesData(change.doc.data());
+      }
+    });
+    render();
+  }, err => console.warn('Firebase listener error:', err));
+
+}).catch(err => console.warn('Firebase init error:', err));
 
 render();
 </script>
