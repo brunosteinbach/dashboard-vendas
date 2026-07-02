@@ -235,163 +235,40 @@ let sortBy='valor', viewMode='grid', search='', catFiltro=null;
 
 // ---- VENDEDOR ----
 function onVendChange(){
+  const selKey = document.getElementById('selMes').value;
   const vend=document.getElementById('selVend').value;
   const sc=document.getElementById('selCli');
   sc.innerHTML='<option value="">— Selecione um cliente —</option>';
-  if(!vend||!DB[vend]){sc.disabled=true;document.getElementById('selCount').textContent='';showEmpty();return;}
-  Object.keys(DB[vend]).sort().forEach(c=>{
+  const db = getDB(selKey);
+  if(!vend||!db[vend]){sc.disabled=true;document.getElementById('selCount').textContent='';showEmpty();return;}
+  Object.keys(db[vend]).sort().forEach(c=>{
     const o=document.createElement('option');
     o.value=o.textContent=c;
     sc.appendChild(o);
   });
   sc.disabled=false;
-  document.getElementById('selCount').textContent=Object.keys(DB[vend]).length+' clientes';
+  document.getElementById('selCount').textContent=Object.keys(db[vend]).length+' clientes';
   showEmpty('Selecione um cliente para ver o mix de produtos');
 }
 
 // ---- CLIENTE ----
 function onCliChange(){
+  const selKey = document.getElementById('selMes').value;
   const vend=document.getElementById('selVend').value;
   const cli=document.getElementById('selCli').value;
   if(!vend||!cli){showEmpty();return;}
   search=''; catFiltro=null;
-  render(vend,cli);
-}
-
-function showEmpty(msg){
-  document.getElementById('mainArea').innerHTML=`<div class="empty"><div class="empty-icon">🍱</div><div class="empty-title">${msg||'Selecione vendedor e cliente'}</div><div class="empty-sub">Os dados de Maio 2026 aparecerão aqui</div></div>`;
+  const db = getDB(selKey);
+  renderWithDB(db, vend, cli);
 }
 
 // ---- RENDER PRINCIPAL ----
 function render(vend,cli){
-  const prods=DB[vend]?.[cli]||[];
-  if(!prods.length){showEmpty('Nenhum produto encontrado');return;}
-
-  const totalVal=prods.reduce((s,p)=>s+p.v,0);
-  const totalQtd=prods.reduce((s,p)=>s+p.q,0);
-  const maxVal=Math.max(...prods.map(p=>p.v));
-  const maxQtd=Math.max(...prods.map(p=>p.q));
-  const cor=VCOLS[vend]||'#e8442a';
-  const catsPresentes=[...new Set(prods.map(p=>getCat(p.p).n))];
-
-  // Aplicar filtros
-  let lista=prods.filter(p=>{
-    const ms=!search||p.p.toUpperCase().includes(search.toUpperCase());
-    const mc=!catFiltro||getCat(p.p).n===catFiltro;
-    return ms&&mc;
-  });
-
-  // Ordenar
-  if(sortBy==='valor')      lista=[...lista].sort((a,b)=>b.v-a.v);
-  else if(sortBy==='qtde')  lista=[...lista].sort((a,b)=>b.q-a.q);
-  else if(sortBy==='preco') lista=[...lista].sort((a,b)=>b.u-a.u);
-  else                       lista=[...lista].sort((a,b)=>a.p.localeCompare(b.p));
-
-  // Títulos de sort
-  const sortLabels={valor:'Valor ↓',qtde:'Qtde ↓',preco:'Preço Unit. ↓',nome:'A–Z'};
-
-  const cliQ=cli.replace(/'/g,"\'").replace(/"/g,'&quot;');
-
-  const infoBar=`<div class="cli-bar">
-    <div class="cli-info">
-      <div class="cli-vend">${vend}</div>
-      <div class="cli-nome">${cli}</div>
-    </div>
-    <span class="badge b1">📦 ${prods.length} itens</span>
-    <span class="badge b2">✕ ${fmtQ(totalQtd)} un.</span>
-    <span class="badge b3">${fmtK(totalVal)} total</span>
-    <span class="badge b4">🏷 ${catsPresentes.length} categorias</span>
-  </div>`;
-
-  // Pills de categoria
-  const pills=CATS.filter(c=>catsPresentes.includes(c.n)).map(c=>`
-    <span class="cat-pill ${catFiltro===c.n?'on':''}" style="color:${c.c};${catFiltro===c.n?'background:'+c.c+'22;border-color:'+c.c+';':''}"
-      onclick="toggleCat('${c.n.replace(/'/g,"\'")}','${vend}','${cliQ}')">
-      ${c.n}
-    </span>`).join('');
-
-  const controls=`
-    <div class="controls">
-      <input class="search-box" id="sbx" placeholder="Buscar produto..." value="${search}"
-        oninput="onSearch('${vend}','${cliQ}',this.value)">
-      <div class="btn-grp">
-        <button class="btn ${sortBy==='valor'?'on':''}"  onclick="setSort('valor','${vend}','${cliQ}')">R$ Valor</button>
-        <button class="btn ${sortBy==='qtde'?'on':''}"   onclick="setSort('qtde','${vend}','${cliQ}')">Qtde</button>
-        <button class="btn ${sortBy==='preco'?'on':''}"  onclick="setSort('preco','${vend}','${cliQ}')">Preço Unit.</button>
-        <button class="btn ${sortBy==='nome'?'on':''}"   onclick="setSort('nome','${vend}','${cliQ}')">A–Z</button>
-      </div>
-      <div class="btn-grp">
-        <button class="btn ${viewMode==='grid'?'on':''}"  onclick="setView('grid','${vend}','${cliQ}')">⊞ Grid</button>
-        <button class="btn ${viewMode==='table'?'on':''}" onclick="setView('table','${vend}','${cliQ}')">≡ Lista</button>
-      </div>
-    </div>
-    <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
-      <div class="cats-row">${pills}</div>
-      <span class="sort-info" style="margin-left:auto">${lista.length} de ${prods.length} produtos · ordem: ${sortLabels[sortBy]}</span>
-    </div>`;
-
-  // GRID
-  let content='';
-  if(viewMode==='grid'){
-    content=`<div class="prod-grid">`+lista.map(p=>{
-      const cat=getCat(p.p);
-      const pctV=(p.v/maxVal*100).toFixed(1);
-      return `<div class="prod-card">
-        <div class="prod-accent" style="background:${cat.c}"></div>
-        <div class="prod-name">${p.p}</div>
-        <div class="prod-nums">
-          <div>
-            <div class="prod-val">${fmtR(p.v)}</div>
-            <div class="prod-val-sub">venda líquida</div>
-          </div>
-          <div class="prod-side">
-            <div class="prod-qtde">${fmtQ(p.q)} un.</div>
-            <div class="prod-unit">unit: ${fmtR(p.u)}</div>
-          </div>
-        </div>
-        <div class="prod-bar-bg"><div class="prod-bar-fill" style="width:${pctV}%;background:${cat.c}"></div></div>
-        <div class="prod-cat" style="color:${cat.c}">${cat.n}</div>
-      </div>`;
-    }).join('')+`</div>`;
-  } else {
-    // TABLE
-    content=`<div style="overflow-x:auto"><table class="pt"><thead><tr>
-      <th class="rk">#</th>
-      <th>Produto</th>
-      <th>Categoria</th>
-      <th class="r">Qtde</th>
-      <th class="r">Preço Unit.</th>
-      <th class="r">Venda Líquida</th>
-      <th style="min-width:120px">Participação</th>
-    </tr></thead><tbody>`+
-    lista.map((p,i)=>{
-      const cat=getCat(p.p);
-      const pctV=(p.v/totalVal*100).toFixed(1);
-      const barW=(p.v/maxVal*100).toFixed(1);
-      return `<tr>
-        <td class="rk">${i+1}</td>
-        <td style="color:var(--tx);max-width:240px;word-break:break-word">${p.p}</td>
-        <td><span style="font-size:9px;color:${cat.c};letter-spacing:.05em;text-transform:uppercase">${cat.n}</span></td>
-        <td class="r" style="font-weight:500;color:var(--tx)">${fmtQ(p.q)}</td>
-        <td class="r"><span class="price-tag">${fmtR(p.u)}</span></td>
-        <td class="r" style="font-weight:600;color:var(--tx)">${fmtR(p.v)}</td>
-        <td>
-          <div class="bar-w">
-            <div class="bar-bg"><div class="bar-fill" style="width:${barW}%;background:${cat.c}"></div></div>
-            <span style="font-size:10px;color:var(--t3);min-width:34px">${pctV}%</span>
-          </div>
-        </td>
-      </tr>`;
-    }).join('')+`</tbody></table></div>`;
-  }
-
-  document.getElementById('mainArea').innerHTML=infoBar+`<div>${controls}</div>`+content;
-
-  // Manter foco no search
-  if(search){const s=document.getElementById('sbx');if(s){s.focus();s.setSelectionRange(s.value.length,s.value.length);}}
+  const selKey = document.getElementById('selMes').value;
+  const db = getDB(selKey);
+  renderWithDB(db, vend, cli);
 }
 
-// ---- HELPERS ----
 function getVC(){return[document.getElementById('selVend').value, document.getElementById('selCli').value];}
 function onSearch(v,c,val){search=val;render(v,c);}
 function setSort(s,v,c){sortBy=s;render(v,c);}
@@ -446,35 +323,6 @@ function onMesChange() {
   document.getElementById('selCount').textContent = '';
   showEmpty();
   if (vend) onVendChange();
-}
-
-function onVendChange(){
-  const selKey = document.getElementById('selMes').value;
-  const mes = getMesKey(selKey);
-  const vend=document.getElementById('selVend').value;
-  const sc=document.getElementById('selCli');
-  sc.innerHTML='<option value="">— Selecione um cliente —</option>';
-  const db = getDB(selKey);
-  if(!vend||!db[vend]){sc.disabled=true;document.getElementById('selCount').textContent='';showEmpty();return;}
-  Object.keys(db[vend]).sort().forEach(c=>{
-    const o=document.createElement('option');
-    o.value=o.textContent=c;
-    sc.appendChild(o);
-  });
-  sc.disabled=false;
-  document.getElementById('selCount').textContent=Object.keys(db[vend]).length+' clientes';
-  showEmpty('Selecione um cliente para ver o mix de produtos');
-}
-
-function onCliChange(){
-  const selKey = document.getElementById('selMes').value;
-  const mes = getMesKey(selKey);
-  const vend=document.getElementById('selVend').value;
-  const cli=document.getElementById('selCli').value;
-  if(!vend||!cli){showEmpty();return;}
-  search=''; catFiltro=null;
-  const db = getDB(selKey);
-  renderWithDB(db, vend, cli);
 }
 
 function renderWithDB(db, vend, cli){
@@ -589,7 +437,11 @@ function renderWithDB(db, vend, cli){
 }
 
 function showEmpty(msg){
-  document.getElementById('mainArea').innerHTML=`<div class="empty"><div class="empty-icon">🍱</div><div class="empty-title">${msg||'Selecione mês, vendedor e cliente'}</div><div class="empty-sub">Os dados de Jan–Mai 2026 aparecerão aqui</div></div>`;
+  const selKey = document.getElementById('selMes') ? document.getElementById('selMes').value : '';
+  const ano = getAnoFromKey(selKey) || '2026';
+  const mesNome = selKey ? (MLABELS_FULL[getMesKey(selKey)] || selKey) : '';
+  const sub = mesNome ? `Os dados de ${mesNome} ${ano} aparecerão aqui` : 'Selecione mês, vendedor e cliente';
+  document.getElementById('mainArea').innerHTML=`<div class="empty"><div class="empty-icon">🍱</div><div class="empty-title">${msg||'Selecione vendedor e cliente'}</div><div class="empty-sub">${sub}</div></div>`;
 }
 
 // ============================================================
@@ -821,17 +673,26 @@ function parseRelatorioHTML(htmlText, fileName) {
     const s9 = row.querySelector('td.s9');
     const s10 = row.querySelector('td.s10');
     if (s8 && s9 && s10) {
-      const qtde = parseFloat(s8.textContent.trim().replace(/\./g,'').replace(',','.'));
       const valor = parseFloat(s9.textContent.trim().replace(/\./g,'').replace(',','.'));
       const margStr = s10.textContent.trim().replace('%','').replace(',','.');
       const marg = parseFloat(margStr);
 
-      if (prevRowType === 's13' && curVend && qtde < 15000) {
-        // Subtotal do vendedor (qtde < 15000 exclui o total geral ~30297 que vem após segundo s13)
-        vendTotals[curVend].fat = valor;
-        vendTotals[curVend].margPond = marg;
+      if (prevRowType === 's13' && curVend) {
+        // Verificar se o que vem depois é: outro s8 (total geral) ou header do próximo vendedor
+        // Em ambos os casos este s8/s9/s10 é o total real do vendedor atual
+        let isVendorTotal = false;
+        for (let j = i + 1; j < Math.min(rows.length, i + 6); j++) {
+          const nr = rows[j];
+          if (nr.querySelector('td.s8')) { isVendorTotal = true; break; }
+          const ns6 = nr.querySelector('td.s6');
+          if (ns6 && ns6.textContent.trim() === 'Vendedor') { isVendorTotal = true; break; }
+          if (nr.querySelector('td.s7') || nr.querySelector('td.s3')) break;
+        }
+        if (isVendorTotal) {
+          vendTotals[curVend].fat = valor;
+          vendTotals[curVend].margPond = marg;
+        }
       }
-      // subtotal de cliente: apenas soma clientes únicos (já contamos via Set no produto)
       prevRowType = 'other';
       continue;
     }
@@ -1028,8 +889,9 @@ function confirmUpload() {
   onMesChange();
   document.getElementById('mesTag').textContent = (MLABEL_FULL[mesKey] || mesKey) + ' ' + ano;
 
-  // ── 5. Fechar modal imediatamente ─────────────────────────────────────────
+  // ── 5. Fechar modal e mostrar toast de sucesso ───────────────────────────
   closeUploadModal();
+  showImportSuccessToast(mesKey, ano, Object.keys(fatPayload).length);
 
   // ── 6. Salvar no Firebase (async, em background via módulo) ───────────────
   if (window._fbSaveUpload) {
@@ -1042,6 +904,40 @@ function confirmUpload() {
     } catch(e) {}
     showFirebaseToast('✅ Adicionado ao dashboard!', '#4ade80');
   }
+}
+
+function showImportSuccessToast(mesKey, ano, nVends) {
+  const MLABELS_F = {jan:'Janeiro',fev:'Fevereiro',mar:'Março',abr:'Abril',mai:'Maio',jun:'Junho',jul:'Julho',ago:'Agosto',set:'Setembro',out:'Outubro',nov:'Novembro',dez:'Dezembro'};
+  const mesNome = MLABELS_F[mesKey] || mesKey;
+  let t = document.getElementById('importSuccessToast');
+  if (!t) {
+    t = document.createElement('div');
+    t.id = 'importSuccessToast';
+    t.style.cssText = [
+      'position:fixed','bottom:24px','left:50%','transform:translateX(-50%)',
+      'background:#0f1117','border:1px solid #4ade8066','border-radius:8px',
+      'padding:14px 22px','display:flex','align-items:center','gap:12px',
+      'font-family:JetBrains Mono,monospace','z-index:9999',
+      'box-shadow:0 4px 24px rgba(0,0,0,.5)','transition:opacity .5s, transform .5s',
+      'min-width:280px'
+    ].join(';');
+    document.body.appendChild(t);
+  }
+  t.innerHTML = `
+    <div style="width:36px;height:36px;border-radius:50%;background:#4ade8022;border:1px solid #4ade8066;display:flex;align-items:center;justify-content:center;flex-shrink:0">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#4ade80" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+    </div>
+    <div>
+      <div style="color:#4ade80;font-size:12px;font-weight:700;letter-spacing:.04em">IMPORTADO COM SUCESSO</div>
+      <div style="color:#888;font-size:11px;margin-top:2px">${mesNome} ${ano} · ${nVends} vendedor${nVends!==1?'es':''} carregados</div>
+    </div>`;
+  t.style.opacity = '1';
+  t.style.transform = 'translateX(-50%) translateY(0)';
+  clearTimeout(t._to);
+  t._to = setTimeout(() => {
+    t.style.opacity = '0';
+    t.style.transform = 'translateX(-50%) translateY(10px)';
+  }, 4000);
 }
 
 function showFirebaseToast(msg, color) {
@@ -1119,7 +1015,10 @@ try {
   // Expor função de salvar para o script principal
   window._fbSaveUpload = async function(payload) {
     try {
-      await setDoc(doc(db, 'uploads', payload.mesKey), {
+      const docId = (payload.anoLabel && payload.anoLabel !== '2026')
+        ? payload.anoLabel + '-' + payload.mesKey
+        : payload.mesKey;
+      await setDoc(doc(db, 'uploads', docId), {
         ...payload,
         uploadedAt: new Date().toISOString()
       });

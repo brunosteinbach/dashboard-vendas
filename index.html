@@ -233,8 +233,14 @@ function fmtFull(v) {
 }
 function totalFat(d) { return Object.values(d.fat || {}).reduce((a,b)=>a+b,0); }
 function avgMarg(d) {
-  const vals = Object.values(d.marg || {}).filter(Boolean);
-  return vals.length ? vals.reduce((a,b)=>a+b,0)/vals.length : 0;
+  // Margem ponderada pelo faturamento de cada vendedor
+  const fat = d.fat || {}; const marg = d.marg || {};
+  let sumFat = 0, sumPond = 0;
+  Object.keys(marg).forEach(v => {
+    const f = fat[v] || 0; const m = marg[v] || 0;
+    if (f > 0 && m > 0) { sumPond += m * f; sumFat += f; }
+  });
+  return sumFat > 0 ? sumPond / sumFat : 0;
 }
 
 // ── Render ────────────────────────────────────────────────────────────────────
@@ -261,8 +267,9 @@ function render() {
 
   // Period badge
   const firstAno = anos[0]; const lastAno = anos[anos.length-1];
-  const allMesKeys = allKeys.map(k => allData[k]).filter(d => d.ano === lastAno).map(d => d.mesKey);
-  const sortedMes = allMesKeys.sort((a,b) => ORDER.indexOf(a) - ORDER.indexOf(b));
+  // Period badge — mostra todos os meses do primeiro ao último
+  const allMesKeys = allKeys.map(k => allData[k]).map(d => d.mesKey);
+  const sortedMes = [...new Set(allMesKeys)].sort((a,b) => ORDER.indexOf(a) - ORDER.indexOf(b));
   const firstMes = sortedMes[0]; const lastMes = sortedMes[sortedMes.length-1];
   document.getElementById('periodBadge').textContent =
     (firstAno !== lastAno ? firstAno + '–' + lastAno : (MLABEL[firstMes]||'') + ' – ' + (MLABEL[lastMes]||'') + ' ' + (lastAno||''));
