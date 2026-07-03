@@ -201,11 +201,12 @@ const MFULL  = {jan:'Janeiro',fev:'Fevereiro',mar:'Março',abr:'Abril',mai:'Maio
 
 // ── Dados hardcoded Jan–Mai 2026 (fallback + base) ───────────────────────────
 const BASE_2026 = {
-  jan: { fat: { 'SHOYU EXPRESS':376451,'BERNARDO RENGEL':295880,'DANIEL ANTONIO':295060,'BRUNA CARLI':311420,'BRUNO STEINBACH':289170,'CLEBER':20890 }, marg: {'SHOYU EXPRESS':46.2,'BERNARDO RENGEL':46.1,'DANIEL ANTONIO':36.8,'BRUNA CARLI':45.9,'BRUNO STEINBACH':45.4,'CLEBER':48.1} },
-  fev: { fat: { 'SHOYU EXPRESS':349200,'BERNARDO RENGEL':278100,'DANIEL ANTONIO':280500,'BRUNA CARLI':290800,'BRUNO STEINBACH':268400,'CLEBER':19200 }, marg: {'SHOYU EXPRESS':45.8,'BERNARDO RENGEL':45.3,'DANIEL ANTONIO':36.2,'BRUNA CARLI':45.1,'BRUNO STEINBACH':44.9,'CLEBER':47.5} },
-  mar: { fat: { 'SHOYU EXPRESS':398600,'BERNARDO RENGEL':312400,'DANIEL ANTONIO':315800,'BRUNA CARLI':328900,'BRUNO STEINBACH':301200,'CLEBER':22100 }, marg: {'SHOYU EXPRESS':46.5,'BERNARDO RENGEL':46.8,'DANIEL ANTONIO':37.1,'BRUNA CARLI':46.2,'BRUNO STEINBACH':45.7,'CLEBER':48.8} },
-  abr: { fat: { 'SHOYU EXPRESS':361800,'BERNARDO RENGEL':289600,'DANIEL ANTONIO':291400,'BRUNA CARLI':304100,'BRUNO STEINBACH':278500,'CLEBER':20400 }, marg: {'SHOYU EXPRESS':45.1,'BERNARDO RENGEL':45.0,'DANIEL ANTONIO':36.5,'BRUNA CARLI':44.8,'BRUNO STEINBACH':44.6,'CLEBER':47.2} },
-  mai: { fat: { 'SHOYU EXPRESS':362700,'BERNARDO RENGEL':290800,'DANIEL ANTONIO':295100,'BRUNA CARLI':307800,'BRUNO STEINBACH':281000,'CLEBER':20600 }, marg: {'SHOYU EXPRESS':45.4,'BERNARDO RENGEL':45.2,'DANIEL ANTONIO':36.9,'BRUNA CARLI':45.0,'BRUNO STEINBACH':44.8,'CLEBER':47.4} }
+  jan: { fat: {'SHOYU EXPRESS':391506,'BERNARDO RENGEL':352767.93,'DANIEL ANTONIO':159230.46,'BRUNA CARLI':214266.83,'BRUNO STEINBACH':311201.07,'CLEBER':12169.38}, marg: {'SHOYU EXPRESS':43.49,'BERNARDO RENGEL':44.15,'DANIEL ANTONIO':39.74,'BRUNA CARLI':47.40,'BRUNO STEINBACH':43.68,'CLEBER':76.27} },
+  fev: { fat: {'SHOYU EXPRESS':338652.78,'BERNARDO RENGEL':324577.63,'DANIEL ANTONIO':119377.32,'BRUNA CARLI':204900.80,'BRUNO STEINBACH':274204.91,'CLEBER':12836.43}, marg: {'SHOYU EXPRESS':43.82,'BERNARDO RENGEL':45.95,'DANIEL ANTONIO':43.55,'BRUNA CARLI':47.71,'BRUNO STEINBACH':42.85,'CLEBER':63.70} },
+  mar: { fat: {'SHOYU EXPRESS':350937.90,'BERNARDO RENGEL':351602.67,'DANIEL ANTONIO':163477.08,'BRUNA CARLI':231249.43,'BRUNO STEINBACH':302657.65,'CLEBER':5770.61}, marg: {'SHOYU EXPRESS':45.48,'BERNARDO RENGEL':46.38,'DANIEL ANTONIO':43.28,'BRUNA CARLI':46.98,'BRUNO STEINBACH':45.38,'CLEBER':75.58} },
+  abr: { fat: {'SHOYU EXPRESS':371175.12,'BERNARDO RENGEL':310964.59,'DANIEL ANTONIO':158943.96,'BRUNA CARLI':240989.90,'BRUNO STEINBACH':283027.26,'CLEBER':13312.15}, marg: {'SHOYU EXPRESS':43.16,'BERNARDO RENGEL':44.55,'DANIEL ANTONIO':38.21,'BRUNA CARLI':43.15,'BRUNO STEINBACH':39.77,'CLEBER':63.91} },
+  mai: { fat: {'SHOYU EXPRESS':310123.97,'BERNARDO RENGEL':283039.18,'DANIEL ANTONIO':171642.79,'BRUNA CARLI':185366.66,'BRUNO STEINBACH':161877.14,'CLEBER':7684.84}, marg: {'SHOYU EXPRESS':48.62,'BERNARDO RENGEL':44.07,'DANIEL ANTONIO':39.44,'BRUNA CARLI':50.20,'BRUNO STEINBACH':48.61,'CLEBER':63.78} },
+  jun: { fat: {'SHOYU EXPRESS':339858.98,'BERNARDO RENGEL':265542.43,'DANIEL ANTONIO':174934.59,'BRUNA CARLI':260885.63,'BRUNO STEINBACH':241251.00,'CLEBER':8961.10}, marg: {'SHOYU EXPRESS':50.60,'BERNARDO RENGEL':48.48,'DANIEL ANTONIO':37.22,'BRUNA CARLI':49.69,'BRUNO STEINBACH':49.82,'CLEBER':66.78} }
 };
 
 // ── Estado ────────────────────────────────────────────────────────────────────
@@ -445,7 +446,13 @@ try {
       const d = doc.data();
       if (d.mesKey && d.anoLabel) {
         const key = `${d.anoLabel}-${d.mesKey}`;
-        allData[key] = { mesKey: d.mesKey, ano: d.anoLabel, fat: d.fat||{}, marg: d.marg||{} };
+        // Só sobrescrever o BASE_2026 se o Firebase tiver um faturamento MAIOR
+        // (evita dados antigos/incorretos sobrescreverem valores hardcoded corretos)
+        const fatFirebase = Object.values(d.fat||{}).reduce((a,b)=>a+b,0);
+        const fatBase = allData[key] ? Object.values(allData[key].fat||{}).reduce((a,b)=>a+b,0) : 0;
+        if (fatFirebase > fatBase || !allData[key]) {
+          allData[key] = { mesKey: d.mesKey, ano: d.anoLabel, fat: d.fat||{}, marg: d.marg||{} };
+        }
       }
     });
     render();
@@ -460,7 +467,11 @@ try {
       if (change.type === 'removed') {
         delete allData[key];
       } else {
-        allData[key] = { mesKey: d.mesKey, ano: d.anoLabel, fat: d.fat||{}, marg: d.marg||{} };
+        const fatFb = Object.values(d.fat||{}).reduce((a,b)=>a+b,0);
+        const fatCur = allData[key] ? Object.values(allData[key].fat||{}).reduce((a,b)=>a+b,0) : 0;
+        if (fatFb > fatCur || !allData[key]) {
+          allData[key] = { mesKey: d.mesKey, ano: d.anoLabel, fat: d.fat||{}, marg: d.marg||{} };
+        }
       }
     });
     render();

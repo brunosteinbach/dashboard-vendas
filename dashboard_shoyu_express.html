@@ -88,6 +88,7 @@ table.dt tr:hover td{background:var(--s2);color:var(--tx)}
   <button class="fb" data-m="mar" onclick="setMes(this)">Mar</button>
   <button class="fb" data-m="abr" onclick="setMes(this)">Abr</button>
   <button class="fb" data-m="mai" onclick="setMes(this)">Mai</button>
+  <button class="fb" data-m="jun" onclick="setMes(this)">Jun</button>
   <div class="fsep"></div>
   <span class="fl">Vendedor</span>
   <button class="fb on" data-v="TODOS" onclick="setVend(this)">Todos</button>
@@ -130,34 +131,34 @@ table.dt tr:hover td{background:var(--s2);color:var(--tx)}
 // ============================================================
 // DADOS REAIS — VALORES MENSAIS (NÃO ACUMULADOS) DOS PDFs
 // ============================================================
-let MESES_ALL = ['jan','fev','mar','abr','mai'];
-const MESES_LABEL = {jan:'Jan',fev:'Fev',mar:'Mar',abr:'Abr',mai:'Mai'};
-const DU = {jan:21,fev:20,mar:21,abr:21,mai:20};
+let MESES_ALL = ['jan','fev','mar','abr','mai','jun'];
+const MESES_LABEL = {jan:'Jan',fev:'Fev',mar:'Mar',abr:'Abr',mai:'Mai',jun:'Jun',jul:'Jul',ago:'Ago',set:'Set',out:'Out',nov:'Nov',dez:'Dez'};
+const DU = {jan:21,fev:20,mar:21,abr:21,mai:20,jun:20,jul:23,ago:21,set:22,out:23,nov:20,dez:21};
 
 // Faturamento total por vendedor/mês (dos PDFs)
 const FAT = {
-  'SHOYU EXPRESS':   {jan:391506,fev:338652.78,mar:350937.90,abr:371175.12,mai:310123.97},
-  'BERNARDO RENGEL': {jan:352767.93,fev:324577.63,mar:351602.67,abr:310964.59,mai:283039.18},
-  'DANIEL ANTONIO':  {jan:159230.46,fev:119377.32,mar:163477.08,abr:158943.96,mai:171642.79},
-  'BRUNA CARLI':     {jan:214266.83,fev:204900.80,mar:231249.43,abr:240989.90,mai:185366.66},
-  'BRUNO STEINBACH': {jan:311201.07,fev:274204.91,mar:302657.65,abr:283027.26,mai:161877.14},
-  'CLEBER':          {jan:12169.38,fev:12836.43,mar:5770.61,abr:13312.15,mai:7684.84},
+  'SHOYU EXPRESS':   {jan:391506,fev:338652.78,mar:350937.90,abr:371175.12,mai:310123.97,jun:339858.98},
+  'BERNARDO RENGEL': {jan:352767.93,fev:324577.63,mar:351602.67,abr:310964.59,mai:283039.18,jun:265542.43},
+  'DANIEL ANTONIO':  {jan:159230.46,fev:119377.32,mar:163477.08,abr:158943.96,mai:171642.79,jun:174934.59},
+  'BRUNA CARLI':     {jan:214266.83,fev:204900.80,mar:231249.43,abr:240989.90,mai:185366.66,jun:260885.63},
+  'BRUNO STEINBACH': {jan:311201.07,fev:274204.91,mar:302657.65,abr:283027.26,mai:161877.14,jun:241251.00},
+  'CLEBER':          {jan:12169.38,fev:12836.43,mar:5770.61,abr:13312.15,mai:7684.84,jun:8961.10},
 };
 const MARG = {
-  'SHOYU EXPRESS':   {jan:43.49,fev:43.82,mar:45.48,abr:43.16,mai:48.62},
-  'BERNARDO RENGEL': {jan:44.15,fev:45.95,mar:46.38,abr:44.55,mai:44.07},
-  'DANIEL ANTONIO':  {jan:39.74,fev:43.55,mar:43.28,abr:38.21,mai:39.44},
-  'BRUNA CARLI':     {jan:47.40,fev:47.71,mar:46.98,abr:43.15,mai:50.20},
-  'BRUNO STEINBACH': {jan:43.68,fev:42.85,mar:45.38,abr:39.77,mai:48.61},
-  'CLEBER':          {jan:76.27,fev:63.70,mar:75.58,abr:63.91,mai:63.78},
+  'SHOYU EXPRESS':   {jan:43.49,fev:43.82,mar:45.48,abr:43.16,mai:48.62,jun:50.60},
+  'BERNARDO RENGEL': {jan:44.15,fev:45.95,mar:46.38,abr:44.55,mai:44.07,jun:48.48},
+  'DANIEL ANTONIO':  {jan:39.74,fev:43.55,mar:43.28,abr:38.21,mai:39.44,jun:37.22},
+  'BRUNA CARLI':     {jan:47.40,fev:47.71,mar:46.98,abr:43.15,mai:50.20,jun:49.69},
+  'BRUNO STEINBACH': {jan:43.68,fev:42.85,mar:45.38,abr:39.77,mai:48.61,jun:49.82},
+  'CLEBER':          {jan:76.27,fev:63.70,mar:75.58,abr:63.91,mai:63.78,jun:66.78},
 };
 const POSITIV = {
-  'SHOYU EXPRESS':   {jan:58,fev:49,mar:56,abr:49,mai:49},
-  'BERNARDO RENGEL': {jan:56,fev:53,mar:55,abr:53,mai:52},
-  'DANIEL ANTONIO':  {jan:24,fev:23,mar:24,abr:26,mai:25},
-  'BRUNA CARLI':     {jan:61,fev:69,mar:76,abr:83,mai:68},
-  'BRUNO STEINBACH': {jan:76,fev:76,mar:84,abr:75,mai:64},
-  'CLEBER':          {jan:5,fev:5,mar:3,abr:4,mai:4},
+  'SHOYU EXPRESS':   {jan:58,fev:49,mar:56,abr:49,mai:49,jun:51},
+  'BERNARDO RENGEL': {jan:56,fev:53,mar:55,abr:53,mai:52,jun:59},
+  'DANIEL ANTONIO':  {jan:24,fev:23,mar:24,abr:26,mai:25,jun:8},
+  'BRUNA CARLI':     {jan:61,fev:69,mar:76,abr:83,mai:68,jun:66},
+  'BRUNO STEINBACH': {jan:76,fev:76,mar:84,abr:75,mai:64,jun:60},
+  'CLEBER':          {jan:5,fev:5,mar:3,abr:4,mai:4,jun:4},
 };
 const VENDS = Object.keys(FAT);
 const VCOLS = {'SHOYU EXPRESS':'#e8442a','BERNARDO RENGEL':'#f5a623','DANIEL ANTONIO':'#4ade80','BRUNA CARLI':'#60a5fa','BRUNO STEINBACH':'#c084fc','CLEBER':'#fb7185'};

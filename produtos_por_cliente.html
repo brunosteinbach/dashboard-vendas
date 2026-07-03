@@ -160,7 +160,8 @@ table.pt tr:hover td{background:var(--s2);color:var(--tx)}
       <option value="fev">Fevereiro</option>
       <option value="mar">Março</option>
       <option value="abr">Abril</option>
-      <option value="mai" selected>Maio</option>
+      <option value="mai">Maio</option>
+      <option value="jun" selected>Junho</option>
     </select>
   </div>
   <div class="sel-group">
@@ -279,7 +280,7 @@ function toggleCat(cat,v,c){catFiltro=catFiltro===cat?null:cat;render(v,c);}
 // ── Mapeamento interno de meses por ano ──────────────────────────────────
 // keys de 2026: 'jan','fev','mar','abr','mai',...
 // keys de 2027+: '2027-jan','2027-fev',...
-const MESES_POR_ANO = {'2026': ['jan','fev','mar','abr','mai']};
+const MESES_POR_ANO = {'2026': ['jan','fev','mar','abr','mai','jun']};
 const MLABELS_FULL = {jan:'Janeiro',fev:'Fevereiro',mar:'Março',abr:'Abril',mai:'Maio',jun:'Junho',jul:'Julho',ago:'Agosto',set:'Setembro',out:'Outubro',nov:'Novembro',dez:'Dezembro'};
 
 function getMesKey(selKey) {
