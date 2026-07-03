@@ -453,6 +453,31 @@ function applyMesData(d) {
     window.MESES_ALL.sort((a,b) => ORDER.indexOf(a) - ORDER.indexOf(b));
   }
 
+  // Atualizar CLIDB com dados de clientes do mês (se disponíveis)
+  if (d.clientes) {
+    try {
+      const cliData = typeof d.clientes === 'string' ? JSON.parse(d.clientes) : d.clientes;
+      // cliData = { 'SHOYU EXPRESS': { 'NOME CLIENTE': [{p,q,v,u}, ...] }, ... }
+      Object.keys(cliData).forEach(vend => {
+        if (!CLIDB[vend]) CLIDB[vend] = [];
+        Object.keys(cliData[vend]).forEach(nomeCliente => {
+          const prods = cliData[vend][nomeCliente];
+          const fatCli = prods.reduce((s, p) => s + (p.v || 0), 0);
+          // Calcular margem média simples dos produtos (m campo)
+          const margsArr = prods.filter(p => p.m > 0).map(p => p.m);
+          const margCli = margsArr.length ? margsArr.reduce((a,b)=>a+b,0)/margsArr.length : 0;
+          // Encontrar ou criar entrada no CLIDB
+          let entry = CLIDB[vend].find(c => c.nome === nomeCliente);
+          if (!entry) {
+            entry = { nome: nomeCliente, meses: {} };
+            CLIDB[vend].push(entry);
+          }
+          entry.meses[mesKey] = { fat: Math.round(fatCli*100)/100, marg: Math.round(margCli*100)/100 };
+        });
+      });
+    } catch(e) { console.warn('Erro ao aplicar clientes no CLIDB:', e); }
+  }
+
   // Adicionar botão de mês se não existir
   const container = document.querySelector('.filters');
   if (container && !document.querySelector(`.fb[data-m="${mesKey}"]`)) {
@@ -483,8 +508,17 @@ try {
   // Carregar todos os meses já salvos
   getDocs(uploadsCol).then(snap => {
     snap.forEach(doc => applyMesData(doc.data()));
-    window.render && window.render();
-  }).catch(err => console.warn('Firebase getDocs error:', err));
+    // Também carregar dados de clientes para Top 20 / Menor Volume
+    getDocs(collection(db, 'clientes')).then(cliSnap => {
+      cliSnap.forEach(cliDoc => {
+        const d = cliDoc.data();
+        if (d.mesKey && d.clientes) {
+          applyMesData({ mesKey: d.mesKey, anoLabel: d.anoLabel || '2026', clientes: d.clientes });
+        }
+      });
+      window.render && window.render();
+    }).catch(() => { window.render && window.render(); });
+  }).catch(err => { console.warn('Firebase getDocs error:', err); window.render && window.render(); });
 
   // Listener em tempo real — dispara quando produtos_por_cliente faz upload
   onSnapshot(uploadsCol, snap => {
