@@ -646,14 +646,19 @@ function parseRelatorioHTML(htmlText, fileName) {
   //   s8=qtde,   s9=valor, s10=marg% → subtotal (cliente ou vendedor)
   //   s13 (linha separadora antes do total do vendedor)
 
-  // Extrair tokens da DOM de forma eficiente
-  const allTds = doc.querySelectorAll('td[class]');
+  // Extrair tokens via regex no HTML bruto (mais confiável que DOMParser)
+  // Padrão: <td class="sN">TEXTO</td>  ou  <td class="sN"><...>TEXTO</...></td>
   const toks = [];
-  allTds.forEach(td => {
-    const cls = td.className.trim();
-    const txt = td.textContent.trim();
+  const tdRe = /class="(s\d+)"[^>]*>([^<]*(?:<[^/][^>]*>[^<]*<\/[^>]+>[^<]*)*)<\/td>/g;
+  let tdMatch;
+  while ((tdMatch = tdRe.exec(htmlText)) !== null) {
+    const cls = tdMatch[1];
+    // Extrair texto removendo tags internas
+    const rawInner = tdMatch[2];
+    const txt = rawInner.replace(/<[^>]+>/g, '').replace(/&nbsp;/g, ' ').trim();
     toks.push({ cls, txt });
-  });
+  }
+  console.log('Tokens extraídos:', toks.length, '| Primeiros 5:', toks.slice(0,5));
 
   const parsed = {};
   VENDEDORES_LIST.forEach(v => parsed[v] = {});
