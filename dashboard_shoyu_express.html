@@ -505,10 +505,35 @@ try {
   const db = getFirestore(app);
   const uploadsCol = collection(db, 'uploads');
 
-  // Carregar todos os meses já salvos
-  getDocs(uploadsCol).then(snap => {
-    snap.forEach(doc => applyMesData(doc.data()));
-    // Também carregar dados de clientes para Top 20 / Menor Volume
+  // Carregar uploads E clientes em paralelo, render só após ambos
+  Promise.all([
+    getDocs(uploadsCol),
+    getDocs(collection(db, 'clientes'))
+  ]).then(([uploadsSnap, cliSnap]) => {
+    // 1. Aplicar totais (fat/marg/pos) de cada mês
+    uploadsSnap.forEach(doc => applyMesData(doc.data()));
+    // 2. Aplicar dados de clientes (para Top 20 / Menor Volume)
+    cliSnap.forEach(cliDoc => {
+      const d = cliDoc.data();
+      if (d.mesKey && d.clientes) {
+        applyMesData({ mesKey: d.mesKey, anoLabel: d.anoLabel || '2026', clientes: d.clientes });
+      }
+    });
+    // 3. Render único após tudo carregado
+    window.render && window.render();
+  }).catch(err => {
+    console.warn('Firebase load error:', err);
+    window.render && window.render();
+  });
+
+  // Listener em tempo real — atualiza quando novo mês é importado
+  onSnapshot(uploadsCol, snap => {
+    snap.docChanges().forEach(change => {
+      if (change.type === 'added' || change.type === 'modified') {
+        applyMesData(change.doc.data());
+      }
+    });
+    // Recarregar clientes também quando uploads mudam
     getDocs(collection(db, 'clientes')).then(cliSnap => {
       cliSnap.forEach(cliDoc => {
         const d = cliDoc.data();
@@ -518,16 +543,6 @@ try {
       });
       window.render && window.render();
     }).catch(() => { window.render && window.render(); });
-  }).catch(err => { console.warn('Firebase getDocs error:', err); window.render && window.render(); });
-
-  // Listener em tempo real — dispara quando produtos_por_cliente faz upload
-  onSnapshot(uploadsCol, snap => {
-    snap.docChanges().forEach(change => {
-      if (change.type === 'added' || change.type === 'modified') {
-        applyMesData(change.doc.data());
-      }
-    });
-    window.render && window.render();
   }, err => console.warn('Firebase onSnapshot error:', err));
 
 } catch(err) {
