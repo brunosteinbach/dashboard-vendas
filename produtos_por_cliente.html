@@ -638,138 +638,97 @@ function parseRelatorioHTML(htmlText, fileName) {
   }
   const mesLabel = MLABEL[mesKey];
 
-  // ── 2. Percorrer todas as <tr> e extrair hierarquia ──────────────────────
-  // Lógica:
-  //  - Linha vendedor: td.s6 com código numérico + td.s7 com nome vendedor (sem "Cliente" antes)
-  //  - Linha cliente:  td.s6 precedida de td vazio(s) + td.s7 com nome cliente
-  //  - Linha produto:  td.s3 (nome produto) + td.s5 (qtde, valor, margem)
-  //  - Subtotal cliente: tr com td.s8 (qtde bold) + td.s9 (valor bold) + td.s10 (margem bold)
-  //                      precedida por tr com s11 vazia
-  //  - Subtotal vendedor: igual ao subtotal cliente mas precedida por tr com s13 vazia
+  // ── 2. Percorrer tokens para extrair hierarquia ──────────────────────────
+  // Estrutura do FastReport HTML:
+  //   s6=código, s7=VENDEDOR  → header de vendedor
+  //   s6=código, s7=CLIENTE   → header de cliente
+  //   s3=vend,   s3=cli, s3=PRODUTO, s5=qtde, s5=valor, s5=marg% → linha produto
+  //   s8=qtde,   s9=valor, s10=marg% → subtotal (cliente ou vendedor)
+  //   s13 (linha separadora antes do total do vendedor)
 
-  const rows = doc.querySelectorAll('tr');
+  // Extrair tokens da DOM de forma eficiente
+  const allTds = doc.querySelectorAll('td[class]');
+  const toks = [];
+  allTds.forEach(td => {
+    const cls = td.className.trim();
+    const txt = td.textContent.trim();
+    toks.push({ cls, txt });
+  });
+
   const parsed = {};
   VENDEDORES_LIST.forEach(v => parsed[v] = {});
-
-  // totais por vendedor: {fat, margemPond, qtdePond, clientes: Set}
   const vendTotals = {};
-  VENDEDORES_LIST.forEach(v => vendTotals[v] = {fat: 0, margPond: 0, qtdePond: 0, clientes: new Set()});
+  VENDEDORES_LIST.forEach(v => vendTotals[v] = { fat: 0, margPond: 0, clientes: new Set() });
 
   let curVend = null, curCli = null;
-  let prevRowType = null; // 's11' | 's13' | 'other'
+  let prevWasS13 = false;
+  const n = toks.length;
 
-  for (let i = 0; i < rows.length; i++) {
-    const row = rows[i];
-    const cells = row.querySelectorAll('td');
+  for (let i = 0; i < n; i++) {
+    const { cls, txt } = toks[i];
 
-    // ── Detectar linha "separadora" (precede subtotais) ──────────────────
-    // s11 → separadora de subtotal de cliente
-    // s13 → separadora de subtotal de vendedor
-    const hasS11 = row.querySelector('td.s11') !== null;
-    const hasS13 = row.querySelector('td.s13') !== null;
-    if (hasS11) { prevRowType = 's11'; continue; }
-    if (hasS13) { prevRowType = 's13'; continue; }
+    // Linha separadora antes do total do vendedor
+    if (cls === 's13') { prevWasS13 = true; continue; }
+    if (cls === 's11') { prevWasS13 = false; continue; }
 
-    // ── Detectar subtotal (td.s8 + td.s9 + td.s10) ───────────────────────
-    const s8 = row.querySelector('td.s8');
-    const s9 = row.querySelector('td.s9');
-    const s10 = row.querySelector('td.s10');
-    if (s8 && s9 && s10) {
-      const valor = parseFloat(s9.textContent.trim().replace(/\./g,'').replace(',','.'));
-      const margStr = s10.textContent.trim().replace('%','').replace(',','.');
-      const marg = parseFloat(margStr);
-
-      if (prevRowType === 's13' && curVend) {
-        // Verificar se o que vem depois é: outro s8 (total geral) ou header do próximo vendedor
-        // Em ambos os casos este s8/s9/s10 é o total real do vendedor atual
-        let isVendorTotal = false;
-        for (let j = i + 1; j < Math.min(rows.length, i + 6); j++) {
-          const nr = rows[j];
-          if (nr.querySelector('td.s8')) { isVendorTotal = true; break; }
-          const ns6 = nr.querySelector('td.s6');
-          if (ns6 && ns6.textContent.trim() === 'Vendedor') { isVendorTotal = true; break; }
-          if (nr.querySelector('td.s7') || nr.querySelector('td.s3')) break;
-        }
-        if (isVendorTotal) {
-          vendTotals[curVend].fat = valor;
-          vendTotals[curVend].margPond = marg;
-        }
+    // ── Total do vendedor: s8 + s9 + s10 ─────────────────────────────────
+    if (cls === 's8' && i+2 < n && toks[i+1].cls === 's9' && toks[i+2].cls === 's10') {
+      const valor = parseFloat(toks[i+1].txt.replace(/\./g,'').replace(',','.'));
+      const marg  = parseFloat(toks[i+2].txt.replace('%','').replace(',','.'));
+      // É total do vendedor se: linha anterior era s13 OU próximo token é s8 (total geral)
+      const nextIsS8 = (i+3 < n && toks[i+3].cls === 's8');
+      const nextIsVendorHeader = (i+3 < n && toks[i+3].cls === 's6' && i+4 < n && toks[i+4].txt === 'Nome Vendedor');
+      if ((prevWasS13 || nextIsS8 || nextIsVendorHeader) && curVend) {
+        vendTotals[curVend].fat = valor;
+        vendTotals[curVend].margPond = marg;
       }
-      prevRowType = 'other';
+      prevWasS13 = false;
+      i += 2;
       continue;
     }
+    prevWasS13 = false;
 
-    prevRowType = 'other';
-
-    // ── Detectar linha de vendedor ────────────────────────────────────────
-    // Padrão: td.s6 (código) + td.s7 (nome) sem td vazio antes do s6
-    // td.s6 fica em colspan=4 a partir da col 0
-    const s6cells = row.querySelectorAll('td.s6');
-    const s7cells = row.querySelectorAll('td.s7');
-    if (s6cells.length > 0 && s7cells.length > 0) {
-      const s6text = s6cells[0].textContent.trim();
-      const s7text = s7cells[0].textContent.trim();
-
-      // Linha de cabeçalho "Vendedor / Nome Vendedor" — ignorar
-      if (s7text === 'Nome Vendedor' || s7text === 'Nome Cliente') continue;
-
-      // Verificar se é linha de vendedor (td.s6 começa na primeira posição) ou de cliente
-      // Na linha de vendedor: primeira td não é vazia
-      // Na linha de cliente: existem tds vazias antes do s6
-      const firstTd = cells[0];
-      const firstTdEmpty = !firstTd || firstTd.textContent.trim() === '' || firstTd.innerHTML.includes('&nbsp;');
-      const secondTd = cells[1];
-      const secondTdEmpty = !secondTd || secondTd.textContent.trim() === '' || secondTd.innerHTML.includes('&nbsp;');
-
-      // Linha de vendedor: s6 código numérico (sem "Cliente" label acima)
-      // Verificamos: se o texto do s6 é numérico e o s7 bate com nossos vendedores
-      if (/^\d+$/.test(s6text)) {
-        const vendorMatch = VENDEDORES_LIST.find(v => v === s7text || s7text.startsWith(v));
-        if (vendorMatch && firstTdEmpty && !secondTdEmpty === false) {
-          // É linha de vendedor
-          curVend = vendorMatch;
-          curCli = null;
-          continue;
-        }
-        // É linha de cliente
-        if (curVend) {
-          curCli = s7text;
-          if (!parsed[curVend][curCli]) parsed[curVend][curCli] = [];
-          if (vendTotals[curVend]) vendTotals[curVend].clientes.add(curCli);
-        }
+    // ── Header de vendedor: s6=código numérico + s7=NOME_VENDEDOR ─────────
+    if (cls === 's6' && /^\d+$/.test(txt) && i+1 < n && toks[i+1].cls === 's7') {
+      const s7txt = toks[i+1].txt;
+      const vendorMatch = VENDEDORES_LIST.find(v => v === s7txt);
+      if (vendorMatch) {
+        curVend = vendorMatch;
+        curCli  = null;
+        i++; continue;
       }
-      continue;
+      // É header de cliente (s6=código, s7=nome cliente)
+      if (curVend && s7txt && s7txt !== 'Nome Cliente' && s7txt !== 'Nome Vendedor') {
+        curCli = s7txt;
+        if (!parsed[curVend][curCli]) {
+          parsed[curVend][curCli] = [];
+          vendTotals[curVend].clientes.add(curCli);
+        }
+        i++; continue;
+      }
     }
 
-    // ── Detectar linha de produto ─────────────────────────────────────────
-    // td.s3 (nome do produto) + td.s5 (qtde) + td.s5 (valor) + td.s5 (margem%)
-    const s3 = row.querySelector('td.s3');
-    const s5cells = row.querySelectorAll('td.s5');
-    if (s3 && s5cells.length >= 3 && curVend && curCli) {
-      const nomeProd = s3.textContent.trim();
-      // Filtrar linhas de cabeçalho e informativas
-      if (!nomeProd || /^(Nome|Período|Perfil|Emissão|DISTRIBUIDORA|Relatório|Vendedor|Cliente)/.test(nomeProd)) continue;
-      // Filtrar se é linha "VENDEDOR / CLIENTE" (cabeçalho de contexto, classe s3 mas sem números)
-      // Essas linhas têm exatamente 2 s5 com nomes, não números — verificar s5[0] é número
-      const qtdeText = s5cells[0].textContent.trim().replace(',','.');
-      const qtde = parseFloat(qtdeText);
-      if (isNaN(qtde)) continue;
-
-      const valText = s5cells[1] ? s5cells[1].textContent.trim().replace(/\./g,'').replace(',','.') : '';
-      const val = parseFloat(valText);
-      if (isNaN(val)) continue;
-
-      const margText = s5cells[2] ? s5cells[2].textContent.trim().replace('%','').replace(',','.') : '0';
-      const marg = parseFloat(margText) || 0;
-
-      if (nomeProd.length > 1 && qtde > 0) {
-        parsed[curVend][curCli].push({
-          p: nomeProd,
-          q: qtde,
-          v: Math.round(val * 100) / 100,
-          u: Math.round(val / qtde * 100) / 100,
-          m: Math.round(marg * 100) / 100
-        });
+    // ── Linha de produto: s3=vend, s3=cli, s3=produto, s5, s5, s5 ─────────
+    if (cls === 's3' && curVend && curCli) {
+      // Espera: [s3=vend] [s3=cli] [s3=produto] [s5=qtde] [s5=valor] [s5=marg]
+      if (txt === curVend && i+5 < n &&
+          toks[i+1].cls === 's3' && toks[i+1].txt === curCli &&
+          toks[i+2].cls === 's3' &&
+          toks[i+3].cls === 's5' && toks[i+4].cls === 's5' && toks[i+5].cls === 's5') {
+        const nomeProd = toks[i+2].txt;
+        if (!nomeProd) { i += 5; continue; }
+        const qtde = parseFloat(toks[i+3].txt.replace(/\./g,'').replace(',','.'));
+        const val  = parseFloat(toks[i+4].txt.replace(/\./g,'').replace(',','.'));
+        const marg = parseFloat(toks[i+5].txt.replace('%','').replace(',','.')) || 0;
+        if (!isNaN(qtde) && !isNaN(val) && qtde > 0) {
+          parsed[curVend][curCli].push({
+            p: nomeProd,
+            q: qtde,
+            v: Math.round(val * 100) / 100,
+            u: Math.round(val / qtde * 100) / 100
+          });
+        }
+        i += 5; continue;
       }
     }
   }
@@ -894,7 +853,7 @@ function confirmUpload() {
 
     // ── 5. Salvar no Firebase ────────────────────────────────────────────────
     if (window._fbSaveUpload) {
-      window._fbSaveUpload({ mesKey, anoLabel: ano, fat: fatPayload, marg: margPayload, pos: posPayload });
+      window._fbSaveUpload({ mesKey, anoLabel: ano, fat: fatPayload, marg: margPayload, pos: posPayload, clientes: data });
     } else {
       try {
         const payload = JSON.stringify({ mesKey, anoLabel: ano, fat: fatPayload, marg: margPayload, pos: posPayload });
@@ -1001,7 +960,7 @@ window.showFirebaseToast = showFirebaseToast;
 </html>
 <script type="module">
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js';
-import { getFirestore, doc, setDoc } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
+import { getFirestore, doc, setDoc, collection, getDocs } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
 
 const FIREBASE_CFG = {
   apiKey: "AIzaSyBYENtXQNZ-scr-1o-hMHRNxdvKCHdc86I",
@@ -1026,6 +985,14 @@ try {
         ...payload,
         uploadedAt: new Date().toISOString()
       });
+      // Salvar dados de clientes/produtos em documento separado (pode ser grande)
+      if (payload.clientes) {
+        await setDoc(doc(db, 'clientes', docId), {
+          mesKey: payload.mesKey,
+          anoLabel: payload.anoLabel,
+          clientes: JSON.stringify(payload.clientes)
+        });
+      }
       window.showFirebaseToast && window.showFirebaseToast('✅ Firebase atualizado!', '#4ade80');
       console.log('✅ Firebase salvo:', payload.mesKey);
     } catch(err) {
@@ -1035,6 +1002,31 @@ try {
       try { localStorage.setItem('shoyu_upload_' + payload.mesKey, JSON.stringify(payload)); } catch(e) {}
     }
   };
+
+  // Carregar clientes salvos do Firebase ao iniciar
+  getDocs(collection(db, 'clientes')).then(snap => {
+    snap.forEach(docSnap => {
+      const d = docSnap.data();
+      if (d.mesKey && d.clientes) {
+        try {
+          const key = (d.anoLabel && d.anoLabel !== '2026') ? d.anoLabel + '-' + d.mesKey : d.mesKey;
+          if (!window.DB_MESES) window.DB_MESES = {};
+          window.DB_MESES[d.mesKey] = JSON.parse(d.clientes);
+          // Registrar no MESES_POR_ANO
+          const ano = d.anoLabel || '2026';
+          if (!MESES_POR_ANO[ano]) MESES_POR_ANO[ano] = [];
+          if (!MESES_POR_ANO[ano].includes(d.mesKey)) {
+            MESES_POR_ANO[ano].push(d.mesKey);
+            const ORDER = ['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'];
+            MESES_POR_ANO[ano].sort((a,b) => ORDER.indexOf(a) - ORDER.indexOf(b));
+          }
+          console.log('✅ Clientes carregados do Firebase:', d.mesKey);
+        } catch(e) { console.warn('Erro ao parsear clientes:', e); }
+      }
+    });
+    // Atualizar select de meses após carregar
+    if (typeof onAnoChange === 'function') onAnoChange();
+  }).catch(err => console.warn('Erro ao carregar clientes:', err));
 
   console.log('✅ Firebase módulo pronto (produtos)');
 } catch(err) {
