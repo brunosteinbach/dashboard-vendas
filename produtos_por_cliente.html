@@ -708,18 +708,23 @@ function parseRelatorioHTML(htmlText, fileName) {
       }
     }
 
-    // ── Linha de produto: s3=vend, s3=cli, s3=produto, s5, s5, s5 ─────────
+    // ── Linha de produto: s3=vend, s3=cli, s3=produto, s3='', s5=qtde, s3='', s5=valor, s3='', s5=marg
     if (cls === 's3' && curVend && curCli) {
-      // Espera: [s3=vend] [s3=cli] [s3=produto] [s5=qtde] [s5=valor] [s5=marg]
-      if (txt === curVend && i+5 < n &&
+      // Estrutura real: [s3=vend][s3=cli][s3=prod][s3=''][s5=qtde][s3=''][s5=valor][s3=''][s5=marg]
+      if (txt === curVend && i+8 < n &&
           toks[i+1].cls === 's3' && toks[i+1].txt === curCli &&
           toks[i+2].cls === 's3' &&
-          toks[i+3].cls === 's5' && toks[i+4].cls === 's5' && toks[i+5].cls === 's5') {
+          toks[i+3].cls === 's3' && toks[i+3].txt === '' &&
+          toks[i+4].cls === 's5' &&
+          toks[i+5].cls === 's3' && toks[i+5].txt === '' &&
+          toks[i+6].cls === 's5' &&
+          toks[i+7].cls === 's3' && toks[i+7].txt === '' &&
+          toks[i+8].cls === 's5') {
         const nomeProd = toks[i+2].txt;
-        if (!nomeProd) { i += 5; continue; }
-        const qtde = parseFloat(toks[i+3].txt.replace(/\./g,'').replace(',','.'));
-        const val  = parseFloat(toks[i+4].txt.replace(/\./g,'').replace(',','.'));
-        const marg = parseFloat(toks[i+5].txt.replace('%','').replace(',','.')) || 0;
+        if (!nomeProd) { i += 8; continue; }
+        const qtde = parseFloat(toks[i+4].txt.replace(/\./g,'').replace(',','.'));
+        const val  = parseFloat(toks[i+6].txt.replace(/\./g,'').replace(',','.'));
+        const marg = parseFloat(toks[i+8].txt.replace('%','').replace(',','.')) || 0;
         if (!isNaN(qtde) && !isNaN(val) && qtde > 0) {
           parsed[curVend][curCli].push({
             p: nomeProd,
@@ -728,7 +733,7 @@ function parseRelatorioHTML(htmlText, fileName) {
             u: Math.round(val / qtde * 100) / 100
           });
         }
-        i += 5; continue;
+        i += 8; continue;
       }
     }
   }
