@@ -408,7 +408,7 @@ function renderWithDB(db, vend, cli){
         <div class="prod-name">${p.p}</div>
         <div class="prod-nums">
           <div><div class="prod-val">${fmtR(p.v)}</div><div class="prod-val-sub">total</div></div>
-          <div class="prod-side"><div class="prod-qtde">${fmtQ(p.q)}</div><div class="prod-qtde-sub">unidades</div><div class="prod-unit">R$ ${fmtQ(p.u)}/un</div></div>
+          <div class="prod-side"><div class="prod-qtde">${fmtQ(p.q)}</div><div class="prod-qtde-sub">unidades</div><div class="prod-unit">R$ ${fmtQ(p.q>0?p.v/p.q:0)}/un</div></div>
         </div>
         <div class="prod-bar-bg"><div class="prod-bar-fill" style="width:${pct.toFixed(1)}%;background:${cat.c}"></div></div>
         <div class="prod-cat" style="color:${cat.c}">${cat.n}</div>`;
@@ -429,7 +429,7 @@ function renderWithDB(db, vend, cli){
         <td>${p.p}</td>
         <td><span style="color:${cat.c};font-size:9px;text-transform:uppercase">${cat.n}</span></td>
         <td class="r">${fmtQ(p.q)}</td>
-        <td class="r"><span class="price-tag">R$ ${fmtQ(p.u)}</span></td>
+        <td class="r"><span class="price-tag">R$ ${fmtQ(p.q>0?p.v/p.q:0)}</span></td>
         <td class="r"><div class="bar-w"><div class="bar-bg"><div class="bar-fill" style="width:${pct}%;background:${cat.c}"></div></div><strong>${fmtR(p.v)}</strong></div></td>`;
       tbody.appendChild(tr);
     });
