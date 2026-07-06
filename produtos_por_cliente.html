@@ -733,10 +733,9 @@ function parseRelatorioHTML(htmlText, fileName) {
         if (!isNaN(qtde) && !isNaN(val) && qtde > 0) {
           parsed[curVend][curCli].push({
             p: nomeProd,
-            q: qtde,
+            q: Math.round(qtde * 100) / 100,
             v: Math.round(val * 100) / 100,
-            u: Math.round(val / qtde * 100) / 100,
-            m: marg
+            m: Math.round(marg * 100) / 100
           });
         }
         i += 8; continue;
@@ -971,7 +970,7 @@ window.showFirebaseToast = showFirebaseToast;
 </html>
 <script type="module">
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js';
-import { getFirestore, doc, setDoc, collection, getDocs } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
+import { getFirestore, doc, setDoc, deleteDoc, collection, getDocs } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
 
 const FIREBASE_CFG = {
   apiKey: "AIzaSyBYENtXQNZ-scr-1o-hMHRNxdvKCHdc86I",
@@ -992,6 +991,8 @@ try {
       const docId = (payload.anoLabel && payload.anoLabel !== '2026')
         ? payload.anoLabel + '-' + payload.mesKey
         : payload.mesKey;
+      // deleteDoc antes de setDoc para garantir limpeza de dados antigos
+      try { await deleteDoc(doc(db, 'clientes', docId)); } catch(e) {}
       await setDoc(doc(db, 'uploads', docId), {
         ...payload,
         uploadedAt: new Date().toISOString()
