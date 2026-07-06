@@ -735,7 +735,8 @@ function parseRelatorioHTML(htmlText, fileName) {
             p: nomeProd,
             q: qtde,
             v: Math.round(val * 100) / 100,
-            u: Math.round(val / qtde * 100) / 100
+            u: Math.round(val / qtde * 100) / 100,
+            m: marg
           });
         }
         i += 8; continue;

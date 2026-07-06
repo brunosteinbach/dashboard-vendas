@@ -463,9 +463,12 @@ function applyMesData(d) {
         Object.keys(cliData[vend]).forEach(nomeCliente => {
           const prods = cliData[vend][nomeCliente];
           const fatCli = prods.reduce((s, p) => s + (p.v || 0), 0);
-          // Calcular margem média simples dos produtos (m campo)
-          const margsArr = prods.filter(p => p.m > 0).map(p => p.m);
-          const margCli = margsArr.length ? margsArr.reduce((a,b)=>a+b,0)/margsArr.length : 0;
+          // Margem ponderada pelo faturamento de cada produto
+          let sumMargPond = 0, sumFatMarg = 0;
+          prods.forEach(p => {
+            if (p.m > 0 && p.v > 0) { sumMargPond += p.m * p.v; sumFatMarg += p.v; }
+          });
+          const margCli = sumFatMarg > 0 ? sumMargPond / sumFatMarg : 0;
           // Encontrar ou criar entrada no CLIDB
           let entry = CLIDB[vend].find(c => c.nome === nomeCliente);
           if (!entry) {
