@@ -504,7 +504,7 @@ async function handleFile(file) {
       pl.textContent = 'Concluído!';
       if (!result) return; // erro já foi mostrado
       uploadParsed = result;
-      showUploadSuccess(result.mesLabel, result.anoLabel, result.totalCli, result.totalProd, result.mesKey);
+      showUploadSuccess(result.mesLabel, result.anoLabel, result.totalCli, result.totalProd, result.mesKey, result.dataInicio, result.dataFim);
     } else {
       // PDF (parser original)
       pl.textContent = 'Lendo PDF…';
@@ -621,12 +621,15 @@ function parseRelatorioHTML(htmlText, fileName) {
   const doc = parser.parseFromString(htmlText, 'text/html');
 
   // ── 1. Detectar período ──────────────────────────────────────────────────
-  let mesKey = null, anoLabel = '2026';
+  let mesKey = null, anoLabel = '2026', dataInicio = null, dataFim = null;
   const allText = doc.body ? doc.body.textContent : htmlText;
-  const periodMatch = allText.match(/Período entre \d{2}\/(\d{2})\/(\d{4}) e \d{2}\/(\d{2})\/(\d{4})/);
+  const periodMatch = allText.match(/Período entre (\d{2}\/\d{2}\/\d{4}) e (\d{2}\/\d{2}\/\d{4})/);
   if (periodMatch) {
-    const mNum = parseInt(periodMatch[3]);
-    anoLabel = periodMatch[4];
+    dataInicio = periodMatch[1]; // DD/MM/YYYY
+    dataFim    = periodMatch[2];
+    const partes = dataFim.split('/');
+    const mNum = parseInt(partes[1]);
+    anoLabel = partes[2];
     mesKey = MMAP[mNum];
   }
   if (!mesKey) {
@@ -690,21 +693,47 @@ function parseRelatorioHTML(htmlText, fileName) {
     if (cls === 's13') { prevWasS13 = true; continue; }
     if (cls === 's11') { prevWasS13 = false; continue; }
 
-    // ── Total do vendedor: s8 [s12*] s9 [s12*] s10 ───────────────────────
+    // ── Total: s8 [s12*] s9 [s12*] s10 ─────────────────────────────────
     if (cls === 's8') {
       const j9  = skipS12(i + 1, 's9');
       const j10 = j9 >= 0 ? skipS12(j9 + 1, 's10') : -1;
       if (j9 >= 0 && j10 >= 0) {
         const valor = parseFloat(toks[j9].txt.replace(/\./g,'').replace(',','.'));
         const marg  = parseFloat(toks[j10].txt.replace('%','').replace(',','.'));
-        // É total de vendedor se: veio após s13, ou próximo s8 é total geral, ou vem s6 de header
-        let nextMeaningful = j10 + 1;
-        while (nextMeaningful < n && toks[nextMeaningful].cls === 's12') nextMeaningful++;
-        const nextIsS8 = nextMeaningful < n && toks[nextMeaningful].cls === 's8';
-        const nextIsS6 = nextMeaningful < n && toks[nextMeaningful].cls === 's6';
-        if ((prevWasS13 || nextIsS8 || nextIsS6) && curVend) {
-          vendTotals[curVend].fat      = valor;
-          vendTotals[curVend].margPond = marg;
+        let nm = j10 + 1;
+        while (nm < n && toks[nm].cls === 's12') nm++;
+
+        if (formato === 'VCP') {
+          // VCP: total do vendedor vem antes de s6='Vendedor' (próximo vend) ou antes de s8 duplo (total geral)
+          const nextIsS8 = nm < n && toks[nm].cls === 's8';
+          const nextIsVH = nm < n && toks[nm].cls === 's6' && nm+1 < n && toks[nm+1].txt === 'Nome Vendedor';
+          if ((nextIsS8 || nextIsVH) && curVend) {
+            vendTotals[curVend].fat      = valor;
+            vendTotals[curVend].margPond = marg;
+          }
+        } else {
+          // CVP: cada vendedor tem subtotal por cliente. O subtotal do VENDEDOR é o primeiro s8 após produtos
+          // seguido de s13. O subtotal do CLIENTE é o segundo s8 (repetição) seguido de s6=Cliente ou s4.
+          // Identificar: após s13, se vem OUTRO s13 → era subtotal do cliente (pular)
+          //              após s13, se vem s6=Cliente ou s4 → era subtotal do vendedor (acumular)
+          const nextIsS13 = nm < n && toks[nm].cls === 's13';
+          const nextIsClientHeader = nm < n && (toks[nm].cls === 's6' || toks[nm].cls === 's4');
+          if (nextIsS13 && curVend) {
+            // Verificar o que vem após esse s13 para distinguir subtotal vendedor vs subtotal cliente
+            let nm2 = nm + 1;
+            while (nm2 < n && toks[nm2].cls === 's12') nm2++;
+            const afterS13isS13 = nm2 < n && toks[nm2].cls === 's13'; // subtotal cliente antes do total geral
+            const afterS13isS8  = nm2 < n && toks[nm2].cls === 's8';  // subtotal cliente antes de próx cliente
+            if (!afterS13isS13) {
+              // É subtotal do vendedor — acumular
+              vendTotals[curVend]._fatAcc  = (vendTotals[curVend]._fatAcc  || 0) + valor;
+              vendTotals[curVend]._pondAcc = (vendTotals[curVend]._pondAcc || 0) + marg * valor;
+            }
+          } else if (nextIsClientHeader && curVend) {
+            // Subtotal do vendedor sem s13 entre eles (único vendedor no cliente)
+            vendTotals[curVend]._fatAcc  = (vendTotals[curVend]._fatAcc  || 0) + valor;
+            vendTotals[curVend]._pondAcc = (vendTotals[curVend]._pondAcc || 0) + marg * valor;
+          }
         }
         prevWasS13 = false;
         i = j10;
@@ -763,7 +792,17 @@ function parseRelatorioHTML(htmlText, fileName) {
     }
   }
 
-  // ── 3. Contagem e validação ───────────────────────────────────────────────
+  // ── 3. Consolidar totais CVP ─────────────────────────────────────────────
+  if (formato === 'CVP') {
+    VENDEDORES_LIST.forEach(v => {
+      const fat = vendTotals[v]._fatAcc || 0;
+      const pond = vendTotals[v]._pondAcc || 0;
+      vendTotals[v].fat      = fat;
+      vendTotals[v].margPond = fat > 0 ? pond / fat : 0;
+    });
+  }
+
+  // ── 4. Contagem e validação ───────────────────────────────────────────────
   let totalCli = 0, totalProd = 0;
   for (const v of VENDEDORES_LIST) {
     for (const c of Object.keys(parsed[v])) {
@@ -778,20 +817,22 @@ function parseRelatorioHTML(htmlText, fileName) {
     return null;
   }
 
-  return { mesKey, mesLabel, anoLabel, data: parsed, vendTotals, totalCli, totalProd };
+  return { mesKey, mesLabel, anoLabel, dataInicio, dataFim, data: parsed, vendTotals, totalCli, totalProd };
 }
 
-function showUploadSuccess(mesLabel, ano, totalCli, totalProd, mesKey) {
+function showUploadSuccess(mesLabel, ano, totalCli, totalProd, mesKey, dataInicio, dataFim) {
   const res = document.getElementById('uploadResult');
   res.style.display = 'block';
   res.className = 'upload-result ok';
-  document.getElementById('resultTitle').innerHTML = '✅ ' + mesLabel + ' ' + ano + ' detectado';
-  
+
+  const periodoStr = (dataInicio && dataFim) ? ` · ${dataInicio} a ${dataFim}` : '';
+  document.getElementById('resultTitle').innerHTML = `✅ ${mesLabel} ${ano} detectado${periodoStr}`;
+
   const jaExiste = !!getDB(mesKey)[VENDEDORES_LIST[0]];
-  document.getElementById('resultMsg').innerHTML = jaExiste 
-    ? '<span style="color:var(--yw)">⚠️ Este mês já existe no dashboard e será substituído.</span>'
+  document.getElementById('resultMsg').innerHTML = jaExiste
+    ? '<span style="color:var(--yw)">⚠️ Mês existente — os dados serão <strong>acumulados</strong> ao período já importado.</span>'
     : '<span style="color:var(--gn)">Novo mês — será adicionado ao dashboard.</span>';
-  
+
   document.getElementById('resultStats').innerHTML = `
     <div class="rstat">Clientes: <strong>${totalCli}</strong></div>
     <div class="rstat">Produtos: <strong>${totalProd}</strong></div>`;
@@ -883,7 +924,7 @@ function confirmUpload() {
 
     // ── 5. Salvar no Firebase ────────────────────────────────────────────────
     if (window._fbSaveUpload) {
-      window._fbSaveUpload({ mesKey, anoLabel: ano, fat: fatPayload, marg: margPayload, pos: posPayload, clientes: data });
+      window._fbSaveUpload({ mesKey, anoLabel: ano, fat: fatPayload, marg: margPayload, pos: posPayload, clientes: data, dataInicio: uploadParsed.dataInicio, dataFim: uploadParsed.dataFim });
     } else {
       try {
         const payload = JSON.stringify({ mesKey, anoLabel: ano, fat: fatPayload, marg: margPayload, pos: posPayload });
@@ -1008,29 +1049,84 @@ try {
   // Expor função de salvar para o script principal
   window._fbSaveUpload = async function(payload) {
     try {
-      const docId = (payload.anoLabel && payload.anoLabel !== '2026')
-        ? payload.anoLabel + '-' + payload.mesKey
-        : payload.mesKey;
-      // deleteDoc antes de setDoc para garantir limpeza de dados antigos
-      try { await deleteDoc(doc(db, 'clientes', docId)); } catch(e) {}
+      // Doc ID sempre usa ano-mes para evitar colisão entre anos
+      const docId = payload.anoLabel + '-' + payload.mesKey;
+
+      // ── Merge com dados existentes do mesmo mês ─────────────────────────
+      // Buscar documento atual do mês
+      const { getDoc } = await import('https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js');
+      const existingDoc = await getDoc(doc(db, 'uploads', docId));
+      let mergedFat = payload.fat, mergedMarg = payload.marg, mergedPos = payload.pos;
+
+      if (existingDoc.exists()) {
+        const ex = existingDoc.data();
+        // Acumular fat por vendedor
+        mergedFat = {};
+        mergedMarg = {};
+        mergedPos = {};
+        const allVends = new Set([...Object.keys(ex.fat || {}), ...Object.keys(payload.fat || {})]);
+        allVends.forEach(v => {
+          const fEx = (ex.fat || {})[v] || 0;
+          const fNew = (payload.fat || {})[v] || 0;
+          mergedFat[v] = Math.round((fEx + fNew) * 100) / 100;
+          // Margem ponderada entre os dois períodos
+          const mEx = (ex.marg || {})[v] || 0;
+          const mNew = (payload.marg || {})[v] || 0;
+          const totalFat = fEx + fNew;
+          mergedMarg[v] = totalFat > 0 ? Math.round((mEx * fEx + mNew * fNew) / totalFat * 100) / 100 : 0;
+          // Positivação: usar o maior (cliente pode aparecer nos dois períodos)
+          const pEx = (ex.pos || {})[v] || 0;
+          const pNew = (payload.pos || {})[v] || 0;
+          mergedPos[v] = Math.max(pEx, pNew);
+        });
+      }
+
+      // Salvar totais acumulados
       await setDoc(doc(db, 'uploads', docId), {
-        ...payload,
+        mesKey: payload.mesKey,
+        anoLabel: payload.anoLabel,
+        fat: mergedFat,
+        marg: mergedMarg,
+        pos: mergedPos,
+        dataInicio: existingDoc.exists() ? (existingDoc.data().dataInicio || payload.dataInicio) : payload.dataInicio,
+        dataFim: payload.dataFim,
         uploadedAt: new Date().toISOString()
       });
-      // Salvar dados de clientes/produtos em documento separado (pode ser grande)
+
+      // Salvar/merge clientes em documento separado
       if (payload.clientes) {
+        let mergedClientes = payload.clientes;
+        const existingCli = await getDoc(doc(db, 'clientes', docId));
+        if (existingCli.exists() && existingCli.data().clientes) {
+          try {
+            const exCli = JSON.parse(existingCli.data().clientes);
+            // Merge: para cada vendedor, mesclar os clientes
+            Object.keys(payload.clientes).forEach(vend => {
+              if (!exCli[vend]) exCli[vend] = {};
+              Object.keys(payload.clientes[vend]).forEach(cli => {
+                if (!exCli[vend][cli]) {
+                  exCli[vend][cli] = payload.clientes[vend][cli];
+                } else {
+                  // Mesmo cliente: concatenar produtos (pode haver repetição por período)
+                  exCli[vend][cli] = [...exCli[vend][cli], ...payload.clientes[vend][cli]];
+                }
+              });
+            });
+            mergedClientes = exCli;
+          } catch(e) { console.warn('Merge clientes error:', e); }
+        }
         await setDoc(doc(db, 'clientes', docId), {
           mesKey: payload.mesKey,
           anoLabel: payload.anoLabel,
-          clientes: JSON.stringify(payload.clientes)
+          clientes: JSON.stringify(mergedClientes)
         });
       }
+
       window.showFirebaseToast && window.showFirebaseToast('✅ Firebase atualizado!', '#4ade80');
-      console.log('✅ Firebase salvo:', payload.mesKey);
+      console.log('✅ Firebase salvo (acumulado):', docId);
     } catch(err) {
       console.warn('Firebase save error:', err);
       window.showFirebaseToast && window.showFirebaseToast('⚠️ Erro Firebase: ' + err.message, '#f5a623');
-      // fallback localStorage
       try { localStorage.setItem('shoyu_upload_' + payload.mesKey, JSON.stringify(payload)); } catch(e) {}
     }
   };
