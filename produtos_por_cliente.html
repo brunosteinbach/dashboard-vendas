@@ -644,26 +644,19 @@ function parseRelatorioHTML(htmlText, fileName) {
   const mesLabel = MLABEL[mesKey];
 
   // ── 2. Percorrer tokens para extrair hierarquia ──────────────────────────
-  // Estrutura do FastReport HTML:
-  //   s6=código, s7=VENDEDOR  → header de vendedor
-  //   s6=código, s7=CLIENTE   → header de cliente
-  //   s3=vend,   s3=cli, s3=PRODUTO, s5=qtde, s5=valor, s5=marg% → linha produto
-  //   s8=qtde,   s9=valor, s10=marg% → subtotal (cliente ou vendedor)
-  //   s13 (linha separadora antes do total do vendedor)
+  // Suporta dois formatos FastReport:
+  //   VCP: Vendedor-Cliente-Produto (s7=VEND primeiro, depois s7=CLI)
+  //   CVP: Cliente-Vendedor-Produto (s7=CLI primeiro, depois s7=VEND)
+  // Linha produto VCP: s3=VEND, s3=CLI,  s3=PROD, s3='', s5, s3='', s5, s3='', s5
+  // Linha produto CVP: s3=CLI,  s3=VEND, s3=PROD, s3='', s5, s3='', s5, s3='', s5
+  // Total vendedor:    s8, [s12*], s9, [s12*], s10  (s12 são separadores opcionais)
 
-  // Extrair tokens via regex no HTML bruto (mais confiável que DOMParser)
-  // Padrão: <td class="sN">TEXTO</td>  ou  <td class="sN"><...>TEXTO</...></td>
-  const toks = [];
-  const tdRe = /class="(s\d+)"[^>]*>([^<]*(?:<[^/][^>]*>[^<]*<\/[^>]+>[^<]*)*)<\/td>/g;
-  let tdMatch;
-  while ((tdMatch = tdRe.exec(htmlText)) !== null) {
-    const cls = tdMatch[1];
-    // Extrair texto removendo tags internas
-    const rawInner = tdMatch[2];
-    const txt = rawInner.replace(/<[^>]+>/g, '').replace(/&nbsp;/g, ' ').trim();
-    toks.push({ cls, txt });
+  // Detectar formato pelo primeiro s6 de header que aparece
+  let formato = 'VCP';
+  for (let k = 0; k < Math.min(toks.length, 30); k++) {
+    if (toks[k].cls === 's6' && toks[k].txt === 'Cliente') { formato = 'CVP'; break; }
+    if (toks[k].cls === 's6' && toks[k].txt === 'Vendedor') { formato = 'VCP'; break; }
   }
-  console.log('Tokens extraídos:', toks.length, '| Primeiros 5:', toks.slice(0,5));
 
   const parsed = {};
   VENDEDORES_LIST.forEach(v => parsed[v] = {});
@@ -674,55 +667,62 @@ function parseRelatorioHTML(htmlText, fileName) {
   let prevWasS13 = false;
   const n = toks.length;
 
+  // Função auxiliar: pular s12 e pegar próximo token de classe esperada
+  function skipS12(startIdx, expectedCls) {
+    let j = startIdx;
+    while (j < n && toks[j].cls === 's12') j++;
+    return (j < n && toks[j].cls === expectedCls) ? j : -1;
+  }
+
   for (let i = 0; i < n; i++) {
     const { cls, txt } = toks[i];
 
-    // Linha separadora antes do total do vendedor
     if (cls === 's13') { prevWasS13 = true; continue; }
     if (cls === 's11') { prevWasS13 = false; continue; }
 
-    // ── Total do vendedor: s8 + s9 + s10 ─────────────────────────────────
-    if (cls === 's8' && i+2 < n && toks[i+1].cls === 's9' && toks[i+2].cls === 's10') {
-      const valor = parseFloat(toks[i+1].txt.replace(/\./g,'').replace(',','.'));
-      const marg  = parseFloat(toks[i+2].txt.replace('%','').replace(',','.'));
-      // É total do vendedor se: linha anterior era s13 OU próximo token é s8 (total geral)
-      const nextIsS8 = (i+3 < n && toks[i+3].cls === 's8');
-      const nextIsVendorHeader = (i+3 < n && toks[i+3].cls === 's6' && i+4 < n && toks[i+4].txt === 'Nome Vendedor');
-      if ((prevWasS13 || nextIsS8 || nextIsVendorHeader) && curVend) {
-        vendTotals[curVend].fat = valor;
-        vendTotals[curVend].margPond = marg;
+    // ── Total do vendedor: s8 [s12*] s9 [s12*] s10 ───────────────────────
+    if (cls === 's8') {
+      const j9  = skipS12(i + 1, 's9');
+      const j10 = j9 >= 0 ? skipS12(j9 + 1, 's10') : -1;
+      if (j9 >= 0 && j10 >= 0) {
+        const valor = parseFloat(toks[j9].txt.replace(/\./g,'').replace(',','.'));
+        const marg  = parseFloat(toks[j10].txt.replace('%','').replace(',','.'));
+        // É total de vendedor se: veio após s13, ou próximo s8 é total geral, ou vem s6 de header
+        let nextMeaningful = j10 + 1;
+        while (nextMeaningful < n && toks[nextMeaningful].cls === 's12') nextMeaningful++;
+        const nextIsS8 = nextMeaningful < n && toks[nextMeaningful].cls === 's8';
+        const nextIsS6 = nextMeaningful < n && toks[nextMeaningful].cls === 's6';
+        if ((prevWasS13 || nextIsS8 || nextIsS6) && curVend) {
+          vendTotals[curVend].fat      = valor;
+          vendTotals[curVend].margPond = marg;
+        }
+        prevWasS13 = false;
+        i = j10;
+        continue;
       }
-      prevWasS13 = false;
-      i += 2;
-      continue;
     }
     prevWasS13 = false;
 
-    // ── Header de vendedor: s6=código numérico + s7=NOME_VENDEDOR ─────────
-    if (cls === 's6' && /^\d+$/.test(txt) && i+1 < n && toks[i+1].cls === 's7') {
+    // ── Header s6=código + s7=nome ────────────────────────────────────────
+    if (cls === 's6' && /^\d+$/.test(txt) && i + 1 < n && toks[i+1].cls === 's7') {
       const s7txt = toks[i+1].txt;
-      const vendorMatch = VENDEDORES_LIST.find(v => v === s7txt);
-      if (vendorMatch) {
-        curVend = vendorMatch;
-        curCli  = null;
-        i++; continue;
+      const isVend = VENDEDORES_LIST.includes(s7txt);
+      if (isVend) {
+        curVend = s7txt; i++; continue;
       }
-      // É header de cliente (s6=código, s7=nome cliente)
-      if (curVend && s7txt && s7txt !== 'Nome Cliente' && s7txt !== 'Nome Vendedor') {
-        curCli = s7txt;
-        if (!parsed[curVend][curCli]) {
-          parsed[curVend][curCli] = [];
-          vendTotals[curVend].clientes.add(curCli);
-        }
-        i++; continue;
+      if (s7txt && s7txt !== 'Nome Cliente' && s7txt !== 'Nome Vendedor') {
+        curCli = s7txt; i++; continue;
       }
     }
 
-    // ── Linha de produto: s3=vend, s3=cli, s3=produto, s3='', s5=qtde, s3='', s5=valor, s3='', s5=marg
-    if (cls === 's3' && curVend && curCli) {
-      // Estrutura real: [s3=vend][s3=cli][s3=prod][s3=''][s5=qtde][s3=''][s5=valor][s3=''][s5=marg]
-      if (txt === curVend && i+8 < n &&
-          toks[i+1].cls === 's3' && toks[i+1].txt === curCli &&
+    // ── Linha de produto ──────────────────────────────────────────────────
+    // VCP: [s3=VEND][s3=CLI][s3=PROD][s3=''][s5][s3=''][s5][s3=''][s5]
+    // CVP: [s3=CLI][s3=VEND][s3=PROD][s3=''][s5][s3=''][s5][s3=''][s5]
+    if (cls === 's3' && curVend && curCli && i + 8 < n) {
+      const isVCP = formato === 'VCP' && txt === curVend && toks[i+1].cls === 's3' && toks[i+1].txt === curCli;
+      const isCVP = formato === 'CVP' && txt === curCli  && toks[i+1].cls === 's3' && toks[i+1].txt === curVend;
+
+      if ((isVCP || isCVP) &&
           toks[i+2].cls === 's3' &&
           toks[i+3].cls === 's3' && toks[i+3].txt === '' &&
           toks[i+4].cls === 's5' &&
@@ -731,17 +731,22 @@ function parseRelatorioHTML(htmlText, fileName) {
           toks[i+7].cls === 's3' && toks[i+7].txt === '' &&
           toks[i+8].cls === 's5') {
         const nomeProd = toks[i+2].txt;
-        if (!nomeProd) { i += 8; continue; }
-        const qtde = parseFloat(toks[i+4].txt.replace(/\./g,'').replace(',','.'));
-        const val  = parseFloat(toks[i+6].txt.replace(/\./g,'').replace(',','.'));
-        const marg = parseFloat(toks[i+8].txt.replace('%','').replace(',','.')) || 0;
-        if (!isNaN(qtde) && !isNaN(val) && qtde > 0) {
-          parsed[curVend][curCli].push({
-            p: nomeProd,
-            q: Math.round(qtde * 100) / 100,
-            v: Math.round(val * 100) / 100,
-            m: Math.round(marg * 100) / 100
-          });
+        if (nomeProd) {
+          const qtde = parseFloat(toks[i+4].txt.replace(/\./g,'').replace(',','.'));
+          const val  = parseFloat(toks[i+6].txt.replace(/\./g,'').replace(',','.'));
+          const marg = parseFloat(toks[i+8].txt.replace('%','').replace(',','.')) || 0;
+          if (!isNaN(qtde) && !isNaN(val) && qtde > 0) {
+            if (!parsed[curVend][curCli]) {
+              parsed[curVend][curCli] = [];
+              vendTotals[curVend].clientes.add(curCli);
+            }
+            parsed[curVend][curCli].push({
+              p: nomeProd,
+              q: Math.round(qtde * 100) / 100,
+              v: Math.round(val  * 100) / 100,
+              m: Math.round(marg * 100) / 100
+            });
+          }
         }
         i += 8; continue;
       }
