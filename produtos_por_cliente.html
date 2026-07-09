@@ -651,6 +651,16 @@ function parseRelatorioHTML(htmlText, fileName) {
   // Linha produto CVP: s3=CLI,  s3=VEND, s3=PROD, s3='', s5, s3='', s5, s3='', s5
   // Total vendedor:    s8, [s12*], s9, [s12*], s10  (s12 são separadores opcionais)
 
+  // Extrair tokens via regex no HTML bruto (garante comportamento igual em qualquer browser)
+  const toks = [];
+  const tdRe = /class="(s\d+)"[^>]*>([^<]*(?:<[^\/][^>]*>[^<]*<\/[^>]+>[^<]*)*)<\/td>/g;
+  let tdMatch;
+  while ((tdMatch = tdRe.exec(htmlText)) !== null) {
+    const cls = tdMatch[1];
+    const txt = tdMatch[2].replace(/<[^>]+>/g, '').replace(/&nbsp;/g, ' ').trim();
+    toks.push({ cls, txt });
+  }
+
   // Detectar formato pelo primeiro s6 de header que aparece
   let formato = 'VCP';
   for (let k = 0; k < Math.min(toks.length, 30); k++) {
